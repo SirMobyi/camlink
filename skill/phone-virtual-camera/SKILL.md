@@ -76,7 +76,7 @@ Rules: no `import` statements (THREE and kit are passed in); metres, +Y up; char
 - `tl.attach(prop, m, {at, until, joint='elbowR', offset:[x,y,z]})`: the prop follows a hand (or any object: pass a car as `m` and `joint: 'none'`) between `at` and `until`. A hand-off is `attach` to A until t, a short `move`, then `attach` to B from t.
 - `tl.look(m, target, {from, until})`: keeps turning m toward a point or object.
 - `tl.call((t) => { ... })` for anything else (lights flicker, a screen colour change).
-- Timing: plan beats on paper first (t in seconds), keep the action inside `duration`, and leave about 1 s of settle at the start so the operator can find the frame.
+- Timing: plan beats on paper first (t in seconds), keep the action inside `duration`, and leave about 1 s of settle at the start so the operator can find the frame. Beat times from the timeline show as ticks on the viewer's scrubber.
 
 ## Handing the take to a video model
 
@@ -95,7 +95,7 @@ Background motion: [every other moving element: traffic, passers-by, steam, lamp
 Camera feel: handheld, natural micro-shake as in @Video 1. No mannequin features, no wooden skin, no text.
 ```
 
-Tips: distinct mannequin colours plus the cast lines prevent identity swaps. Very fast whip pans and full 360s lose identity, so do those as separate shots. Name the beats with seconds; the model follows blocking better when the beats are spelled out.
+Tips: distinct mannequin colours plus the cast lines prevent identity swaps. Very fast whip pans and full 360s lose identity, so do those as separate shots. Name the beats with seconds; the model follows blocking better when the beats are spelled out. For image-to-video workflows, style the take's first frame PNG into the keyframe and pass it with the clean MP4.
 
 ## Blender (optional)
 
