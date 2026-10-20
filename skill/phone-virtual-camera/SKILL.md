@@ -1,15 +1,15 @@
 ---
-name: "phone-virtual-camera"
-description: "Use when someone says \"use camlink\" or wants a 3D blocking scene they can shoot with their phone as a handheld virtual camera, with character and object motion, then hand the take to Seedance, Luma or Runway."
+name: phone-virtual-camera
+description: Use when someone says "use camlink" or wants a 3D blocking scene they can shoot with their phone as a handheld virtual camera, with character and object motion, then hand the take to Seedance, Luma or Runway.
 ---
 
 # camlink: phone as a virtual camera for blocking
 
 camlink is a hosted web app: **https://sirmobyi.github.io/camlink/**
 
-- The computer shows the 3D blocking scene. The phone scans a QR code and becomes the camera (gyro for tilt and pan, on-screen sticks for dolly, truck and pedestal, a lens slider). REC records the move.
+- The computer shows the 3D blocking scene with a timeline (beat ticks, scrubbing), camera moves (push, pull, truck, crane, orbit), framing guides (thirds, 9:16, 4:5, 1:1) and a lens slider. The phone scans a QR code and becomes the camera: gyro for tilt and pan, sticks for dolly, truck and up/down, lens presets and a zoom slider, Rehearse, Reset shot, and Hold to reposition. Recording stops by itself when the action ends.
 - Nothing to install and no Terminal. It works in Chrome, Safari and the Claude app's browser pane. Phone and computer link peer to peer, on any network.
-- Each take downloads a frame-exact **clean 24fps MP4** (rendered in the browser) plus, on demand, the realtime clip and the camera path JSON.
+- Each take downloads a frame-exact **clean 24fps MP4** (rendered in the browser) plus, on demand, the take's first frame (PNG, for styling a keyframe image), the realtime clip and the camera path JSON. **Save still** exports any frame.
 - **A scene lives inside its link** (`#scene=<compressed code>`), so every scene is a shareable URL. Demo scenes: `?scene=cafe-argument` (dialogue at a table) and `?scene=street-pickup` (car arrives, a parcel gets loaded, a passer-by crosses).
 
 Your job: turn the user's description into a scene file, load it, check it, and hand over a link the user can shoot.
@@ -27,11 +27,12 @@ Your job: turn the user's description into a scene file, load it, check it, and 
      raw = c.compress(code.encode()) + c.flush()
      link = "https://sirmobyi.github.io/camlink/#scene=" + base64.urlsafe_b64encode(raw).decode().rstrip("=")
      ```
-4. **Check the beats** (built-in browser): `camlink.framing([x,y,z],[tx,ty,tz], mm)` sets a view, `camlink.seek(t)` freezes the action at t seconds, then take one screenshot per key beat (two or three, not more). Look for characters walking through furniture, props not in hands, people facing the wrong way. Fix and reload. `camlink.seek(null)` releases the freeze. Finish by calling `camlink.framing(...)` with the scene's opening framing.
+4. **Check the beats** (built-in browser): `camlink.framing([x,y,z],[tx,ty,tz], mm)` sets a view (and the shot's reset point), `camlink.seek(t)` moves the timeline to t seconds, then take one screenshot per key beat (two or three, not more). Look for characters walking through furniture, props not in hands, people facing the wrong way. Fix and reload. Finish with `camlink.framing(...)` at the scene's opening framing and `camlink.seek(0)`.
+   - **Preset the shot** when the brief implies it: `camlink.setMove('push'|'pull'|'truckL'|'truckR'|'craneUp'|'craneDown'|'orbitL'|'orbitR'|'none', 'subtle'|'medium'|'big')`, `camlink.setGuide('9:16'|'4:5'|'1:1'|'thirds'|'none')` (a crop frame for cutting a vertical from 16:9), `camlink.setFormat('9:16', 1080)` (to shoot natively vertical), `camlink.setLens(mm)`. Say what you preset.
 5. **Hand over.** Give the scene link and the shooting steps:
-   1. Scan the QR on the right with the phone camera, tap **Start**, allow motion.
-   2. **P** plays the action to rehearse. Frame with the mouse, then tap **Recenter** on the phone: the phone takes over from that framing.
-   3. Tap **REC** on the phone (or press R), perform the move, tap **STOP**. The clean MP4 downloads automatically. The action restarts at 0 s on every take.
+   1. Click **Connect phone**, scan the QR with the phone camera, tap **Start**, allow motion.
+   2. Tap **Rehearse** on the phone (or Space) to watch the action. Frame with the mouse; the phone takes over from that framing. **Hold to reposition** freezes the shot while you re-grip; **Reset shot** returns to the start framing.
+   3. Tap the red button on the phone (or press R) and perform the move. Recording stops when the action ends, the clean MP4 downloads, and the camera returns to the first frame for the next take. **Takes** has the first frame PNG for each take.
 6. **Iterate** on notes ("B should stand at 3 s", "car comes from the other side"): edit the code and load it again. Each load gives a new link. Mention that the old link still opens the old version.
 7. **Generate** with the prompt template at the end, when asked.
 
@@ -105,5 +106,5 @@ The **Export .glb** button saves the scene, and **Camera path** saves a take's p
 - **Red message instead of a scene**: read it. A WebGL message means the browser has 3D off (Brave: lower Shields for the site or turn on graphics acceleration). Chrome, Safari and the Claude browser work. A scene error names the line: fix the code and load it again.
 - **Phone stuck on "connecting…"**: reload the computer page and rescan. If it still won't link, put both devices on the same Wi-Fi or the phone's hotspot (some office networks block peer-to-peer).
 - **"no motion sensor events"** on iPhone: Settings → Safari → Motion & Orientation Access on, then reload.
-- **Pan drifts**: tap Recenter.
+- **Pan drifts, or the operator runs out of room to turn**: Hold to reposition, turn, let go.
 - **No MP4**: the browser lacks WebCodecs (very old Safari). Use the Realtime button on the take.

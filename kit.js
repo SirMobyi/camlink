@@ -272,7 +272,8 @@ export async function loadGLB(nameOrUrl, { scale = 1, shadows = true } = {}) {
 // tl.call((t) => { ... });                                                    // anything custom
 // return { scene, update: tl.update };
 export function timeline() {
-  const poseTracks = [], moveTracks = [], walkTracks = [], afterTracks = [];
+  const poseTracks = [], moveTracks = [], walkTracks = [], afterTracks = [], marks = new Set();
+  const mark = (t) => { if (Number.isFinite(t) && t > 0.05) marks.add(Math.round(t * 10) / 10); };
   const smooth = (x) => x * x * (3 - 2 * x);
   const seg = (keys, t) => {
     if (t <= keys[0].t) return [keys[0], keys[0], 0];
@@ -288,6 +289,7 @@ export function timeline() {
   const tl = {
     poses(m, beats) {
       const keys = sorted(beats);
+      keys.forEach((k) => mark(k.t));
       m.userData.hasPoseTrack = true;
       poseTracks.push((t) => {
         let i = 0; while (i < keys.length - 1 && keys[i + 1].t <= t) i++;
@@ -302,6 +304,7 @@ export function timeline() {
     },
     move(obj, keys, { ease = true } = {}) {
       const ks = sorted(keys);
+      ks.forEach((k) => mark(k.t));
       obj.userData._moved = true;
       const p0 = obj.position.toArray(), r0 = obj.rotation.y / D, s0 = obj.scale.x;
       let lp = p0, lr = r0, ls = s0;
@@ -316,6 +319,7 @@ export function timeline() {
     },
     rotate(obj, keys) {
       const ks = sorted(keys);
+      ks.forEach((k) => mark(k.t));
       moveTracks.push((t) => {
         const [a, b, f] = seg(ks, t), k = smooth(f);
         for (const ax of ['x', 'y', 'z']) if (a[ax] !== undefined && b[ax] !== undefined) obj.rotation[ax] = (a[ax] + (b[ax] - a[ax]) * k) * D;
@@ -327,6 +331,7 @@ export function timeline() {
       const lens = []; let total = 0;
       for (let i = 0; i < pts.length - 1; i++) { const l = pts[i].distanceTo(pts[i + 1]); lens.push(l); total += l; }
       const end = start + total / speed;
+      mark(start); mark(end);
       walkTracks.push({ m, start, end, fn: (t) => {
         let d = THREE.MathUtils.clamp((t - start) * speed, 0, total), i = 0;
         while (i < lens.length - 1 && d > lens[i]) { d -= lens[i]; i++; }
@@ -344,6 +349,7 @@ export function timeline() {
     attach(obj, m, { at = 0, joint = 'elbowR', offset = [0, -0.3, 0.05], until = Infinity } = {}) {
       const home = obj.position.clone(), homeRot = obj.rotation.clone(), v = new THREE.Vector3();
       const first = !obj.userData._attached; obj.userData._attached = true;
+      mark(at); mark(until);
       afterTracks.push((t) => {
         if (t >= at && t < until) {
           const j = m.userData.j?.[joint] || m;
@@ -373,6 +379,9 @@ export function timeline() {
     },
   };
   tl.update = tl.update.bind(tl);
+  // Beat times for the viewer's timeline (seconds)
+  tl.update.markers = () => [...marks].sort((a, b) => a - b);
+  tl.markers = tl.update.markers;
   return tl;
 }
 

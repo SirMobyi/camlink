@@ -11,14 +11,29 @@
 | Computer | Phone |
 |---|---|
 | ![viewer](docs/viewer.png) | <img src="docs/phone.png" alt="phone controller" width="260"> |
-| Shows the scene, records the take, renders the clean MP4 | Gyro for tilt and pan, sticks for dolly, truck and pedestal, lens and smoothing controls |
+| Shows the scene, scrubs the action, records the take, renders the clean MP4 | Gyro for tilt and pan, sticks for dolly, truck and up/down, lens presets and a zoom slider |
 
 1. Open camlink on your computer: Chrome, Safari or the Claude app's browser pane.
 2. Scan the QR code with your phone camera, tap **Start**, allow motion access. Phone and computer link directly; no app, no install, any network.
-3. Press **P** to rehearse the action. Frame the shot with the mouse, then tap **Recenter** on the phone: it takes over from that framing.
-4. Tap **REC**, perform the move, tap **STOP**. A clean 24fps MP4 of the take lands in your Downloads, re-rendered frame by frame from the camera path so no frames are dropped.
+3. Tap **Rehearse** (or press Space) to watch the action. Frame the shot with the mouse; the phone takes over from that framing.
+4. Tap the red button, perform the move, tap it again. Recording stops by itself when the action ends, and a clean 24fps MP4 of the take lands in your Downloads, re-rendered frame by frame from the camera path so no frames are dropped.
 
 The action restarts at 0 s on every take, so takes are repeatable.
+
+## Controls
+
+**Phone**
+- **Hold to reposition**: the shot freezes while you hold it, so you can re-grip or turn your body; let go and it continues from there.
+- **Reset shot**: jump back to the framing you started from.
+- **Lens and zoom**: presets from 16 to 85 mm, plus a zoom slider (12 to 135 mm) that eases like a real zoom.
+- **Feel**: Raw, Handheld, Steady or Gimbal smoothing. **Move**: stick speed from Slow to Drone.
+
+**Computer**
+- **Timeline**: drag to any second; ticks mark the beats of the action. Space plays, arrow keys step.
+- **Camera move**: push in, pull out, truck, crane or orbit, subtle to big. With the phone linked the move carries the camera like a dolly while you aim.
+- **Guides**: rule of thirds, and 9:16, 4:5 or 1:1 crop frames for vertical and square cuts.
+- **Save still**: the current frame as PNG. Each take also has **First frame** for styling a keyframe image.
+- **Lens slider** for mouse framing. Press `?` for all shortcuts.
 
 ## Scenes
 
@@ -58,6 +73,7 @@ Location: @Image 3. Action: [beats with seconds]. Background motion: [everything
 ## Exports
 
 - **Clean MP4**: frame-exact 24fps render of the take (H.264, encoded in the browser).
+- **First frame / still**: PNG of the take's opening frame or of any moment you scrub to.
 - **Realtime**: the clip as it was recorded live.
 - **Camera path**: JSON with position, rotation and focal length per frame (metres, +Y up, 36 mm sensor).
 - **Scene .glb**: the blocking set and cast for Blender or other 3D tools.
@@ -69,7 +85,7 @@ Location: @Image 3. Action: [beats with seconds]. Background motion: [everything
 - **Red message instead of a scene:** read it. A WebGL message means the browser has 3D graphics off. In Brave, lower Shields for the site or turn on graphics acceleration. Chrome, Safari and the Claude browser work out of the box.
 - **Phone stuck on "connecting…":** reload the computer page and rescan. If it still won't link, put both devices on the same Wi-Fi or the phone's hotspot; some office networks block direct connections.
 - **"no motion sensor events" on iPhone:** Settings → Safari → Motion & Orientation Access, then reload.
-- **The camera's pan drifts:** tap Recenter.
+- **The camera's pan drifts or you run out of room to turn:** hold **Hold to reposition**, turn, let go.
 
 ## Repository
 
@@ -78,6 +94,7 @@ index.html      viewer: scene, recording, clean MP4 render, phone link
 phone.html      phone controller
 kit.js          blocking kit: set, props, mannequins, poses, timeline
 scenes/         demo scenes (?scene=<name>)
+beta/           next version under test, live at /camlink/beta/
 blender/        Blender import script
 skill/          the Claude skill (.skill package and SKILL.md)
 docs/           README images

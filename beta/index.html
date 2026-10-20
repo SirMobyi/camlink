@@ -51,7 +51,10 @@
   #frame { position: relative; background: #000; border-radius: 4px; overflow: hidden; box-shadow: 0 0 0 1px var(--line), 0 24px 60px -30px #000; }
   #frame canvas { display: block; width: 100%; height: 100%; }
   .ovl { position: absolute; inset: 0; pointer-events: none; }
-  #thirds line { stroke: #fff; stroke-opacity: .4; stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .ovl { width: 100%; height: 100%; }
+  #thirds i, #thirds b { position: absolute; background: #ffffff66; box-shadow: 0 0 0 .5px #0003; }
+  #thirds i { top: 0; bottom: 0; width: 1px; margin-left: -.5px; }
+  #thirds b { left: 0; right: 0; height: 1px; margin-top: -.5px; }
   #crop .mask { fill: #000; fill-opacity: .55; }
   #crop .edge { fill: none; stroke: var(--amber); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
   #crop text { fill: var(--amber); font: 500 11px var(--mono); }
@@ -87,6 +90,9 @@
   .tools { flex-wrap: wrap; gap: 6px; }
   .tools .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
   .tools .spacer { flex: 1; }
+  .zoom { display: inline-flex; align-items: center; gap: 8px; }
+  .zoom input { width: 120px; accent-color: var(--amber); }
+  .zoom #zoomVal { font: 500 12px var(--mono); color: var(--text); min-width: 44px; font-variant-numeric: tabular-nums; }
   .seg { display: inline-flex; align-items: center; gap: 2px; }
   .lbl { color: var(--mute); font-size: 12px; margin-right: 4px; }
   .t { height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--mute); }
@@ -146,18 +152,22 @@
 <script src="../vendor/peerjs.min.js"></script>
 <script src="../vendor/mp4-muxer.js"></script>
 <script>
-  function camlinkFail(msg) {
-    if (window.__camlinkFailed) return;
-    window.__camlinkFailed = true;
+  function camlinkFail(msg, soft) {
+    if (window.__camlinkFailed && !window.__camlinkSoft) return;
+    window.__camlinkFailed = true; window.__camlinkSoft = !!soft;
     const b = document.getElementById('busy'), t = document.getElementById('busyTxt');
     if (!b || !t) return;
     t.style.cssText = 'max-width:520px;white-space:pre-wrap;text-align:left;color:#ffb4ae';
-    t.textContent = 'camlink hit a problem\n\n' + msg + '\n\nIf this mentions WebGL, your browser has 3D graphics turned off (Brave: lower Shields for this site or enable graphics acceleration). Chrome, Safari and the Claude app browser work out of the box.';
+    t.textContent = soft ? msg : 'camlink hit a problem\n\n' + msg + '\n\nIf this mentions WebGL, your browser has 3D graphics turned off (Brave: lower Shields for this site or enable graphics acceleration). Chrome, Safari and the Claude app browser work out of the box.';
     b.classList.add('on');
+  }
+  // A slow first load is not an error: show a note, and clear it once the viewer is up.
+  function camlinkReady() {
+    if (window.__camlinkSoft) { window.__camlinkFailed = false; window.__camlinkSoft = false; const b = document.getElementById('busy'), t = document.getElementById('busyTxt'); b.classList.remove('on'); t.style.cssText = ''; t.textContent = 'Rendering…'; }
   }
   addEventListener('error', (e) => { if (!window.camlink) camlinkFail(e.message || String(e.error)); });
   addEventListener('unhandledrejection', (e) => { if (!window.camlink) camlinkFail(String(e.reason && e.reason.message || e.reason)); });
-  setTimeout(() => { if (!window.camlink) camlinkFail('Timed out starting the viewer (no error reported).'); }, 12000);
+  setTimeout(() => { if (!window.camlink) camlinkFail('Still loading… this is taking longer than usual (slow connection?). It will appear here when ready.', true); }, 15000);
 </script>
 </head>
 <body>
@@ -175,10 +185,7 @@
   <main id="stage">
     <div id="frame">
       <canvas id="c"></canvas>
-      <svg class="ovl" id="thirds" viewBox="0 0 100 100" preserveAspectRatio="none" hidden>
-        <line x1="33.333" y1="0" x2="33.333" y2="100"/><line x1="66.667" y1="0" x2="66.667" y2="100"/>
-        <line x1="0" y1="33.333" x2="100" y2="33.333"/><line x1="0" y1="66.667" x2="100" y2="66.667"/>
-      </svg>
+      <div class="ovl" id="thirds" hidden><i style="left:33.333%"></i><i style="left:66.667%"></i><b style="top:33.333%"></b><b style="top:66.667%"></b></div>
       <svg class="ovl" id="crop" hidden></svg>
       <div class="hud tl"><span class="tally" id="tally"><i></i><span id="tallyTxt">STBY</span></span></div>
       <div class="hud tr"><span id="hudLens">35mm</span><span id="hudFmt">16:9</span></div>
@@ -228,7 +235,7 @@
           <dt>M</dt><dd>Switch mouse / phone</dd>
           <dt>H</dt><dd>Reset shot to the first frame</dd>
           <dt>G</dt><dd>Thirds grid</dd>
-          <dt>[ ]</dt><dd>Lens (mouse mode)</dd>
+          <dt>[ ]</dt><dd>Zoom out / in</dd>
           <dt>S</dt><dd>Save a still of this frame</dd>
         </dl>
       </div>
@@ -270,6 +277,8 @@
       </select>
       <select class="t" id="quality" aria-label="Resolution"><option value="720">720p</option><option value="1080" selected>1080p</option></select>
       <select class="t" id="fps" aria-label="Realtime frame rate"><option value="24">24 fps</option><option value="30" selected>30 fps</option></select>
+      <span class="sep"></span>
+      <label class="zoom"><span class="lbl">Lens</span><input type="range" id="zoom" min="0" max="1000" step="1" aria-label="Lens focal length"><span id="zoomVal">35mm</span></label>
       <span class="spacer"></span>
       <button class="t" id="stillBtn" title="Save this frame as PNG (S)">Save still</button>
       <button class="t" id="modeBtn" title="Switch mouse / phone (M)">Use phone</button>
@@ -316,13 +325,17 @@ const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.03, 500);
 camera.filmGauge = 36;
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
-let mm = 35;
+let mm = 35, lensTarget = 35, zoomDrag = false;
+const LMIN = 12, LMAX = 135;
+const lensToSlider = (v) => Math.round(1000 * Math.log(v / LMIN) / Math.log(LMAX / LMIN));
+const sliderToLens = (x) => LMIN * Math.pow(LMAX / LMIN, x / 1000);
+const setLens = (v) => { lensTarget = THREE.MathUtils.clamp(v, LMIN, LMAX); };
 
 let scene = new THREE.Scene(), update = () => {}, SCENE_NAME = 'scene', DURATION = 8, sceneCode = '', markers = [];
 const home = { pos: new V3(0, 1.6, 5), q: new Q(), target: new V3(0, 1, 0), mm: 35 };
 function saveHome() { home.pos.copy(camera.position); home.q.copy(camera.quaternion); home.target.copy(controls.target); home.mm = mm; }
 function goHome() {
-  camera.position.copy(home.pos); camera.quaternion.copy(home.q); controls.target.copy(home.target); mm = home.mm;
+  camera.position.copy(home.pos); camera.quaternion.copy(home.q); controls.target.copy(home.target); mm = lensTarget = home.mm;
   if (rig.on) calibrate(true); else controls.update();
 }
 
@@ -342,7 +355,7 @@ async function loadSceneModule(code, { keepCamera = false, label = '' } = {}) {
   $('marks').innerHTML = markers.map((t) => `<div class="mk" style="left:${(t / DURATION) * 100}%" title="${t.toFixed(1)} s"></div>`).join('');
   if (!keepCamera) {
     const c0 = built.camera || { pos: [0, 1.6, 5], target: [0, 1, 0], mm: 35 };
-    camera.position.set(...c0.pos); controls.target.set(...(c0.target || [0, 1, 0])); mm = c0.mm || 35;
+    camera.position.set(...c0.pos); controls.target.set(...(c0.target || [0, 1, 0])); mm = lensTarget = c0.mm || 35;
     camera.setFocalLength(mm); controls.update(); saveHome();
     if (rig.on) calibrate(true);
   }
@@ -495,7 +508,7 @@ function stepRig(dt, rigO) {
   const a = 1 - Math.pow(sm, dt * 60);
   camera.quaternion.slerp(rig.tq, a);
   camera.position.lerp(rig.tp, a);
-  if (pose.mm) mm += (pose.mm - mm) * a;
+  if (pose.mm && !pose.lensMsg) setLens(pose.mm);   // older phone pages send the lens inside each pose
 }
 
 // ---------- phone link (WebRTC via PeerJS) ----------
@@ -544,6 +557,7 @@ function onPhoneData(m) {
   else if (m.t === 'reset' || m.t === 'recenter') { if (m.t === 'reset') goHome(); else if (pose) calibrate(true); }
   else if (m.t === 'rec') { m.on ? startRec() : stopRec(); }
   else if (m.t === 'play') { togglePlay(); }
+  else if (m.t === 'lens') { setLens(+m.mm); }
 }
 const sendAll = (o) => { for (const c of conns) { try { c.send(o); } catch (e) {} } };
 setInterval(() => sendAll({ t: 'state', rec: !!rec, el: rec ? curT : 0, mm: Math.round(mm), busy, scene: SCENE_NAME, playing: playing && !rec, dur: DURATION }), 250);
@@ -609,7 +623,7 @@ function stopRec() {
   rigStart = null;
   if ($('autoReturn').checked && r.path.length) {
     const p0 = r.path[0];
-    camera.position.set(...p0.p); camera.quaternion.set(...p0.q); mm = p0.mm;
+    camera.position.set(...p0.p); camera.quaternion.set(...p0.q); mm = lensTarget = p0.mm;
     if (rig.on) calibrate(true); else { const f = new V3(0, 0, -1).applyQuaternion(camera.quaternion); controls.target.copy(camera.position).addScaledVector(f, Math.max(1, home.pos.distanceTo(home.target))); }
   }
   setTime(0);
@@ -769,6 +783,9 @@ addEventListener('dragover', (e) => { e.preventDefault(); $('drop').classList.ad
 addEventListener('dragleave', (e) => { if (!e.relatedTarget) $('drop').classList.remove('on'); });
 addEventListener('drop', (e) => { e.preventDefault(); $('drop').classList.remove('on'); takeFiles([...e.dataTransfer.files]); });
 $('modeBtn').onclick = () => rig.on ? releaseToMouse() : calibrate();
+$('zoom').addEventListener('input', (e) => { zoomDrag = true; setLens(sliderToLens(+e.target.value)); });
+$('zoom').addEventListener('change', () => { zoomDrag = false; });
+$('zoom').addEventListener('pointerup', () => { zoomDrag = false; });
 
 addEventListener('keydown', (e) => {
   if (['SELECT', 'INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.metaKey || e.ctrlKey) return;
@@ -781,8 +798,8 @@ addEventListener('keydown', (e) => {
   else if (k === 'h' || k === 'H') goHome();
   else if (k === 'g' || k === 'G') setGuide('thirds');
   else if (k === 's' || k === 'S') saveStill();
-  else if (k === '[') mm = Math.max(10, mm - 5);
-  else if (k === ']') mm = Math.min(200, mm + 5);
+  else if (k === '[') setLens(lensTarget - 5);
+  else if (k === ']') setLens(lensTarget + 5);
   else if (k === '?') $('help').hidden = !$('help').hidden;
   else if (k === 'Escape') { $('help').hidden = true; $('drawer').classList.remove('open'); pops.forEach((p) => $(p).hidden = true); }
 });
@@ -799,7 +816,11 @@ function frame(now) {
   const ro = moving ? rigOffset(curT) : null;
   if (rig.on) stepRig(dt, ro ? ro.o : null);
   else if (!(moving && applyRigMouse(curT))) controls.update();
+  mm += (lensTarget - mm) * (1 - Math.pow(0.8, dt * 60));     // eased zoom
+  if (Math.abs(lensTarget - mm) < 0.01) mm = lensTarget;
   camera.setFocalLength(mm);
+  if (!zoomDrag) $('zoom').value = lensToSlider(mm);
+  $('zoomVal').textContent = Math.round(mm) + 'mm';
   update(curT);
   renderer.render(scene, camera);
   if (rec) {
@@ -830,6 +851,7 @@ setFormat(); setModeLabel();
 startPeer(getId());
 if (!conns.size) setTimeout(() => { if (!conns.size && !store.get('paired', false)) togglePop('pairPop', true); }, 600);
 requestAnimationFrame(frame);
+camlinkReady();
 window.camlink = {
   // For Claude: await camlink.loadScene(code) swaps the scene in place (phone stays connected) and returns the shareable link.
   loadScene: (code) => setSceneFromCode(code),
@@ -838,9 +860,14 @@ window.camlink = {
   get phoneConnected() { return conns.size > 0; },
   get takes() { return takes.map((t) => ({ name: t.name, duration: t.duration, clean: !!t.clean })); },
   seek: (t) => { if (playing) togglePlay(false); if (t !== null) setTime(+t); },
-  framing: (pos, target, lens) => { if (rig.on) releaseToMouse(); camera.position.set(...pos); controls.target.set(...target); if (lens) mm = lens; controls.update(); saveHome(); },
+  framing: (pos, target, lens) => { if (rig.on) releaseToMouse(); camera.position.set(...pos); controls.target.set(...target); if (lens) mm = lensTarget = lens; controls.update(); saveHome(); },
   camera, renderer, rig, calibrate, startRec, stopRec, renderClean: (i = 0) => renderClean(takes[i]),
   get scene() { return scene; }, get markers() { return markers; },
+  // Presets Claude can set for the user: setMove('push', 'subtle'|'medium'|'big'), setGuide('thirds'|'9:16'|'4:5'|'1:1'|'none'), setFormat('9:16', 1080)
+  setMove: (kind = 'none', size = 'medium') => { $('rig').value = kind; $('rigAmt').value = { subtle: '0.5', medium: '1', big: '1.8' }[size] || '1'; $('rig').dispatchEvent(new Event('change')); },
+  setGuide: (kind) => { if (kind === 'thirds') { guides.thirds = true; } else if (kind === 'none') { guides.thirds = false; guides.crop = null; } else guides.crop = kind; store.set('guides', guides); drawCrop(); },
+  setFormat: (aspect, quality) => { if (aspect) $('aspect').value = aspect; if (quality) $('quality').value = String(quality); setFormat(); },
+  setLens: (v) => setLens(+v),
 };
 </script>
 </body>
