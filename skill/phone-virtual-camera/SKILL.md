@@ -13,7 +13,7 @@ camlink is a hosted web app: **https://sirmobyi.github.io/camlink/**
   - **Auto**: the scene's shot list drives the camera: framings, moves, lenses, hard cuts, whip pans.
   - **Hybrid**: the Auto shots, with the phone's handheld aim layered on top.
 - Nothing to install and no Terminal. Works in Chrome, Safari and the Claude app's browser pane. Phone and computer link peer to peer, on any network.
-- Exports: a frame-exact **clean 24fps MP4** of every take, the first frame PNG, the realtime clip and the camera path JSON. With a shot list also **Render Auto take** (no realtime pass), **Per-shot MP4s** (one file per shot) and **Shot list** (JSON with a prompt line per shot).
+- Exports: a frame-exact **clean 24fps MP4** of every take, the first frame PNG, the realtime clip and the camera path JSON. **Save still** exports any frame. With a shot list also **Render Auto take** (no realtime pass), **Per-shot MP4s** (one file per shot) and **Shot list** (JSON with a prompt line per shot).
 - **A scene lives inside its link** (`#scene=<compressed code>`), so every scene is a shareable URL. Demo scenes: `?scene=the-letter` (two-hander with an eight-shot Auto camera), `?scene=cafe-argument`, `?scene=street-pickup`.
 
 Your job: turn the user's description into a scene file with good blocking and, by default, a shot list; load it, check it, and hand over a link.
@@ -40,7 +40,7 @@ Your job: turn the user's description into a scene file with good blocking and, 
    - Optional presets for Manual: `camlink.setMove('push'|'pull'|'truckL'|'truckR'|'craneUp'|'craneDown'|'orbitL'|'orbitR'|'none', 'subtle'|'medium'|'big')`, `camlink.setGuide('9:16'|'4:5'|'1:1'|'thirds'|'none')`, `camlink.setFormat('9:16', 1080)`, `camlink.setLens(mm)`. Say what you preset.
 7. **Hand over.** Give the link and the steps for the mode in use:
    - **Auto**: open **Takes → Render Auto take** for the clean MP4 (or press R to record it in realtime). **Per-shot MP4s** and **Shot list** sit on the take. Shots are the blocks under the timeline; click one to jump to it.
-   - **Hybrid / Manual**: click **Connect phone**, scan the QR, tap **Start**, allow motion. Pick **Hybrid** to add handheld aim to the Auto shots, or **Manual** to frame with the mouse and let the phone take over. **Rehearse** (or Space) plays the action; **Hold to reposition** freezes the shot while re-gripping; **Reset shot** returns to the start framing. Tap the red button (or R) to record; recording stops when the action ends and the clean MP4 downloads.
+   - **Hybrid / Manual**: click **Connect phone**, scan the QR, tap **Start**, allow motion. Pick **Hybrid** to add handheld aim to the Auto shots, or **Manual** to frame with the mouse and let the phone take over. **Rehearse** (or Space) plays the action; **Hold to reposition** freezes the shot while re-gripping; **Reset shot** returns to the start framing. Tap the red button (or R) to record; recording stops when the action ends, the clean MP4 downloads, and the camera returns to the first frame for the next take.
 8. **Iterate** on notes ("tighter on B at the reaction", "cut to the insert earlier", "car comes from the other side"): edit and load again. Each load gives a new link; the old link still opens the old version.
 9. **Generate** with the prompt templates at the end, when asked.
 
@@ -161,7 +161,7 @@ Shot 2 (2.0–3.9 s), hard cut: ...
 ```
 Then the Cast, Location, Performance and Background motion lines as above. If the model handles one shot per generation, send **Per-shot MP4s** one at a time with that shot's line, and pass the previous shot's last frame for continuity where the model accepts a first frame.
 
-Tips: distinct mannequin colours plus the cast lines prevent identity swaps. Very fast whip pans and full 360s lose identity; keep them short or split them. For image-to-video, style the take's first frame PNG into the keyframe and pass it with the clean MP4.
+Tips: distinct mannequin colours plus the cast lines prevent identity swaps. Name the beats with seconds; models follow blocking better when beats are spelled out. Very fast whip pans and full 360s lose identity; keep them short or split them. For image-to-video, style the take's first frame PNG into the keyframe and pass it with the clean MP4.
 
 ## Blender (optional)
 
