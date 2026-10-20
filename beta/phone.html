@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b0c0d">
 <title>camlink camera</title>
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap">
@@ -74,7 +75,8 @@
 
   #start { position: fixed; inset: 0; z-index: 5; background: var(--ink); display: grid; place-items: center; padding: 24px; text-align: center; }
   #start .wrap { display: grid; gap: 14px; justify-items: center; max-width: 320px; }
-  #start .mark { font: 500 15px var(--mono); letter-spacing: .02em; }
+  #start .mark { font: 500 15px var(--mono); letter-spacing: .02em; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  #start .mark .logo { width: 44px; height: 44px; color: var(--text); }
   #start p { margin: 0; color: var(--mute); }
   #go { width: 88px; height: 88px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; margin: 8px 0; }
   #go i { width: 68px; height: 68px; border-radius: 50%; background: var(--amber); display: grid; place-items: center; color: #111; font-weight: 600; font-style: normal; }
@@ -98,7 +100,7 @@
 <body>
 <div id="start">
   <div class="wrap">
-    <div class="mark">camlink</div>
+    <div class="mark"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke-linecap="round"><circle cx="5" cy="16" r="2.6" fill="var(--amber)"/><path d="M9.5 14 27 5M9.5 18 27 27" stroke="currentColor" stroke-width="2"/><path d="M27 9.5v13" stroke="var(--amber)" stroke-width="2"/></svg>camlink</div>
     <p>This phone becomes the camera. Hold it like one: landscape for 16:9, upright for 9:16.</p>
     <button id="go" aria-label="Start"><i>Start</i></button>
     <p class="warn" id="startMsg"></p>
@@ -108,7 +110,7 @@
 
 <div id="ui">
   <div class="top"><span class="dot" id="dot"></span><span id="conn">connecting…</span><span id="tc">STBY</span></div>
-  <div class="readout"><span>LENS <b id="lensTop">35</b>mm</span><span id="sceneTop"></span></div>
+  <div class="readout"><span>LENS <b id="lensTop">35</b>mm</span><span id="sceneTop"></span><span id="modeTop" hidden></span></div>
 
   <div class="deck">
     <div class="cap"><button class="round" id="play" aria-label="Rehearse the action"><svg viewBox="0 0 18 18"><path d="M5 3.5l9 5.5-9 5.5z" fill="currentColor" stroke="none"/></svg></button>Rehearse</div>
@@ -192,6 +194,9 @@ function onData(m) {
   if (m.mm) { markLens(m.mm); if (!zoomDrag) { $('zoom').value = lensToSlider(m.mm); $('zoomVal').textContent = m.mm + 'mm'; } }
   $('lensTop').textContent = m.mm;
   $('sceneTop').textContent = (m.scene || '').toUpperCase();
+  const md = m.mode && m.mode !== 'manual';
+  $('modeTop').hidden = !md;
+  if (md) { const b = document.createElement('b'); b.textContent = m.mode === 'auto' ? 'AUTO' : 'HYBRID'; $('modeTop').replaceChildren(b, ' ' + String(m.shot || '').toUpperCase()); }
   $('play').classList.toggle('on', !!m.playing);
   if (m.busy) status('saving take…', true); else if (conn && conn.open) status('linked', true);
 }

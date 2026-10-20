@@ -161,6 +161,8 @@ const POSES = {
   armsCrossed: { armL: [-30, -20, 20], armR: [-30, 20, -20], elbowL: [-100, 0, -40], elbowR: [-100, 0, 40] },
   handsUp: { armL: [-170, 0, 15], armR: [-170, 0, -15], elbowL: [-10, 0, 0], elbowR: [-10, 0, 0] },
   phone: { armL: [0, 0, 6], armR: [-40, 0, -10], elbowR: [-100, 0, 20], neck: [20, 0, 0] },
+  read: { armL: [-45, 0, 10], armR: [-45, 0, -10], elbowL: [-75, 0, -20], elbowR: [-75, 0, 20], neck: [24, 0, 0] },
+  shock: { armL: [-150, 0, 25], armR: [-150, 0, -25], elbowL: [-115, 0, 0], elbowR: [-115, 0, 0], neck: [-12, 0, 0], spine: [-6, 0, 0] },
   carry: { armL: [-35, 0, 8], armR: [-35, 0, -8], elbowL: [-55, 0, -25], elbowR: [-55, 0, 25] },
   offer: { armL: [-65, 0, 6], armR: [-65, 0, -6], elbowL: [-20, 0, 0], elbowR: [-20, 0, 0] },
   wave: { armL: [0, 0, 6], armR: [-160, 0, -20], elbowR: [-30, 0, 0] },
@@ -194,7 +196,7 @@ export function blendPose(m, a, b, k) {
 
 // Simple procedural walk; call every frame with scene time t (seconds).
 export function walkCycle(m, t, { speed = 1.0 } = {}) {
-  const ph = t * speed * 5.5, sw = Math.sin(ph) * 28, kn = Math.max(0, -Math.cos(ph)) * 45, kn2 = Math.max(0, Math.cos(ph)) * 45;
+  const ph = t * speed * 5.5, sw = Math.sin(ph) * 25, kn = Math.max(0, -Math.cos(ph)) * 45, kn2 = Math.max(0, Math.cos(ph)) * 45;
   setPose(m, { legL: [-sw, 0, 2], legR: [sw, 0, -2], kneeL: [kn, 0, 0], kneeR: [kn2, 0, 0], armL: [sw * 0.8, 0, 6], armR: [-sw * 0.8, 0, -6], elbowL: [-15, 0, 0], elbowR: [-15, 0, 0] });
   m.userData.j.hips.position.y = 0.95 + Math.abs(Math.cos(ph)) * 0.025;
 }
@@ -384,6 +386,103 @@ export function timeline() {
   tl.update.markers = () => [...marks].sort((a, b) => a - b);
   tl.markers = tl.update.markers;
   return tl;
+}
+
+
+// ---------------- shots: camera placement and Auto camera ----------------
+// Shot sizes: frame height in metres at the subject, and the default lens for that size.
+export const SIZES = { ECU: [0.2, 85], CU: [0.34, 85], MCU: [0.55, 50], MS: [0.9, 40], MWS: [1.25, 35], WS: [2.3, 28], EWS: [6, 24] };
+const V = (a) => (a && a.isVector3 ? a.clone() : new THREE.Vector3(...a));
+const filmH = (aspect) => 36 / Math.max(aspect, 1);
+const UPV = new THREE.Vector3(0, 1, 0);
+
+// Eye point of a mannequin, centre of any other object, or a point [x,y,z].
+export function eyeOf(s) {
+  if (Array.isArray(s) || s?.isVector3) return V(s);
+  s.updateMatrixWorld(true);
+  const j = s.userData?.j;
+  if (j?.neck) return j.neck.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.17 * s.scale.y, 0));
+  return new THREE.Box3().setFromObject(s).getCenter(new THREE.Vector3());
+}
+function yawOfObj(s) {
+  if (!s || Array.isArray(s) || s.isVector3) return 0;
+  const f = new THREE.Vector3(0, 0, 1).applyQuaternion(s.getWorldQuaternion(new THREE.Quaternion()));
+  return Math.atan2(f.x, f.z);
+}
+const pack = (pos, target, mm) => ({ pos: pos.toArray().map((v) => +v.toFixed(4)), target: target.toArray().map((v) => +v.toFixed(4)), mm: +mm.toFixed(1) });
+
+// Frame one subject. size: ECU CU MCU MS MWS WS EWS. yaw: degrees around the subject from its front
+// (+ toward the subject's left). angle: eye | low | high | top. toward: put the camera on the side of a point instead of yaw.
+export function frame(subject, { size = 'MS', yaw = 0, angle = 'eye', lens, aspect = 16 / 9, toward = null, lift = 0 } = {}) {
+  const [fh, defLens] = SIZES[size] || SIZES.MS;
+  const mm = lens || defLens;
+  const eye = eyeOf(subject);
+  const target = eye.clone(); target.y -= fh * 0.17;
+  const d = fh * mm / filmH(aspect);
+  let dir;
+  if (toward) { dir = V(toward.isObject3D ? eyeOf(toward) : toward).sub(eye).setY(0).normalize(); }
+  else { const a = yawOfObj(subject) + yaw * D; dir = new THREE.Vector3(Math.sin(a), 0, Math.cos(a)); }
+  if (angle === 'top') return pack(target.clone().add(new THREE.Vector3(0, d, 0)).addScaledVector(dir, 0.02), target, mm);
+  const camY = eye.y + ({ eye: 0, low: -Math.min(0.6, eye.y - 0.25), high: 0.8 }[angle] ?? 0) + lift;
+  const dy = camY - target.y, dh = Math.sqrt(Math.max(d * d - dy * dy, d * d * 0.25));
+  const pos = target.clone().addScaledVector(dir, dh); pos.y = camY;
+  return pack(pos, target, mm);
+}
+
+// Coverage for two characters, every camera on the same side of the line between them (180 degree rule).
+// side: 1 or -1 picks the side. Returns wide, two, otsA (over A onto B), otsB, cuA, cuB, insert(obj, size).
+export function coverage(A, B, { side = 1, aspect = 16 / 9, size = 'MCU' } = {}) {
+  const a = eyeOf(A), b = eyeOf(B);
+  const ab = b.clone().sub(a).setY(0).normalize();
+  const n = new THREE.Vector3().crossVectors(UPV, ab).normalize().multiplyScalar(side);
+  const mid = a.clone().add(b).multiplyScalar(0.5);
+  const D = a.distanceTo(b);
+  const [fh] = SIZES[size] || SIZES.MCU;
+  const face = (p) => p.clone().add(new THREE.Vector3(0, -fh * 0.17, 0));
+  const lensFor = (pos, tgt) => THREE.MathUtils.clamp(filmH(aspect) * pos.distanceTo(tgt) / fh, 18, 135);
+  const wideAt = (width, mm, rise) => { const d = width * mm / (filmH(aspect) * aspect); const t = mid.clone(); t.y -= 0.3; const p = t.clone().addScaledVector(n, Math.max(d, 1.2)); p.y = mid.y + rise; return pack(p, t, mm); };
+  const ots = (from, to, back) => { const p = from.clone().addScaledVector(back, 0.6).addScaledVector(n, 0.32); p.y = from.y + 0.05; const t = face(to); return pack(p, t, lensFor(p, t)); };
+  const single = (who, other) => { const dir = other.clone().sub(who).setY(0).normalize().multiplyScalar(Math.cos(25 * D)).addScaledVector(n, Math.sin(25 * D)).normalize(); const mm = (SIZES[size] || SIZES.MCU)[1]; const t = face(who); const p = t.clone().addScaledVector(dir, fh * mm / filmH(aspect)); p.y = who.y; return pack(p, t, mm); };
+  return {
+    normal: n.toArray(),
+    wide: wideAt(D + 4, 24, 1.1),
+    two: wideAt(D + 1.4, 35, 0.05),
+    otsA: ots(a, b, ab.clone().negate()),
+    otsB: ots(b, a, ab.clone()),
+    cuA: single(a, b),
+    cuB: single(b, a),
+    insert: (obj, sz = 'CU') => frame(obj, { size: sz, angle: 'high', toward: eyeOf(obj).addScaledVector(n, 3), aspect }),
+  };
+}
+
+// End framing for a move from a start framing. kind: push pull truckL truckR craneUp craneDown orbitL orbitR zoomIn zoomOut dollyZoom
+export function move(cam, kind = 'push', amount = 1) {
+  const p = V(cam.pos), t = V(cam.target), f = t.clone().sub(p), dist = f.length(); f.normalize();
+  const right = new THREE.Vector3(-f.z, 0, f.x).normalize();
+  let mm = cam.mm;
+  if (kind === 'push') p.addScaledVector(f, dist * 0.35 * amount);
+  if (kind === 'pull') p.addScaledVector(f, -dist * 0.35 * amount);
+  if (kind === 'truckL') { p.addScaledVector(right, -1.2 * amount); t.addScaledVector(right, -1.2 * amount); }
+  if (kind === 'truckR') { p.addScaledVector(right, 1.2 * amount); t.addScaledVector(right, 1.2 * amount); }
+  if (kind === 'craneUp') p.y += 1.2 * amount;
+  if (kind === 'craneDown') p.y = Math.max(0.25, p.y - 1.0 * amount);
+  if (kind === 'orbitL' || kind === 'orbitR') { const rel = p.clone().sub(t).applyAxisAngle(UPV, (kind === 'orbitL' ? -1 : 1) * 25 * D * amount); p.copy(t).add(rel); }
+  if (kind === 'zoomIn') mm *= Math.pow(1.6, amount);
+  if (kind === 'zoomOut') mm /= Math.pow(1.6, amount);
+  if (kind === 'dollyZoom') { const k = 0.6 * amount; p.addScaledVector(f, -dist * k); mm *= (dist * (1 + k)) / dist; }
+  return pack(p, t, THREE.MathUtils.clamp(mm, 10, 200));
+}
+
+// Shot list for the Auto camera. Each shot: { name, t, cam, to?, move?, amount?, ease?, shake?, live?, transition?, desc? }
+// cam / to: a framing {pos, target, mm} or a function returning one (evaluated at the shot's start / end time,
+// or every frame when live: true for tracking shots). transition: 'cut' (default) or 'whip'.
+export function shots(list) { return [...list].sort((x, y) => x.t - y.t).map((s, i) => ({ name: s.name || 'Shot ' + (i + 1), ease: 'smooth', shake: 0, transition: 'cut', ...s })); }
+
+// Deterministic handheld wobble for Auto shots: returns [yaw, pitch, roll] radians and [x, y, z] metres.
+export function shake(t, amt = 0.3, seed = 1) {
+  const n = (f, p) => Math.sin(t * f + p * seed);
+  const r = (a, b, c) => (0.55 * n(1.1, a) + 0.3 * n(2.7, b) + 0.15 * n(6.3, c));
+  return [r(1, 2, 3) * 0.012 * amt, r(4, 5, 6) * 0.009 * amt, r(7, 8, 9) * 0.006 * amt, r(2, 7, 4) * 0.008 * amt, r(3, 1, 8) * 0.006 * amt, r(6, 9, 2) * 0.006 * amt];
 }
 
 export { THREE, POSES };

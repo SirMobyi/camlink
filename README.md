@@ -1,4 +1,7 @@
-# camlink
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/logo/lockup.svg">
+  <img alt="camlink" src="docs/logo/lockup-light.svg" height="40">
+</picture>
 
 **Your phone is the camera.** camlink turns any phone into a handheld virtual camera for 3D blocking scenes. You shoot the move by hand, and camlink gives you a frame-exact MP4 to use as the motion and blocking reference for Seedance, Luma, Runway or any video-to-video model.
 
@@ -35,6 +38,36 @@ The action restarts at 0 s on every take, so takes are repeatable.
 - **Save still**: the current frame as PNG. Each take also has **First frame** for styling a keyframe image.
 - **Lens slider** for mouse framing. Press `?` for all shortcuts.
 
+## Auto camera (beta)
+
+![the-letter, shot by the Auto camera: eight shots, cuts, lenses and a whip pan](docs/auto.gif)
+
+A scene can carry its own **shot list**: framings, moves, lenses and cuts, written by Claude from the blocking or from your notes. The viewer then has three camera modes:
+
+- **Manual**: you frame and move the camera with the mouse or the phone, as before.
+- **Auto**: the shot list drives the camera. Wides, over-the-shoulders, close-ups, inserts, push-ins, tracking shots, hard cuts and whip pans, all on the same side of the action line so screen direction holds.
+- **Hybrid**: the Auto shots, with your phone layered on top for real handheld aim. Hold to reposition still works.
+
+Shots show as segments under the timeline (click one to jump to it) and the current shot is named in the corner of the frame. **Takes → Render Auto take** renders the whole sequence to a clean MP4 with no realtime pass. Every Auto or Hybrid take also exports **Per-shot MP4s** (one file per shot, for models that generate one shot at a time) and a **Shot list** (JSON with a prompt line per shot and its time range).
+
+Try it: [`beta/?scene=the-letter`](https://sirmobyi.github.io/camlink/beta/?scene=the-letter). Press `A` to cycle the modes.
+
+![Auto mode in the viewer](docs/auto.png)
+
+In a scene, shots are a list returned next to `update`. The kit places cameras from the cast, so a shot keeps working when the blocking changes:
+
+```js
+const cov = () => kit.coverage(A, B, { side: -1 });          // every camera on one side of the A-B line
+const shots = kit.shots([
+  { t: 0,   name: 'Establishing', cam: { pos: [2.6, 2.3, 2.6], target: [-1.3, 1, -0.9], mm: 22 }, move: 'push', amount: 0.35 },
+  { t: 3.9, name: 'Two-shot',     cam: () => cov().two, move: 'push', amount: 0.25 },
+  { t: 5.6, name: 'B reads',      cam: () => cov().otsA, live: true, shake: 0.2 },
+  { t: 7.4, name: 'Reaction',     cam: () => cov().cuB, move: 'push', amount: 0.5 },
+  { t: 8.8, name: 'Back to window', cam: () => kit.frame(A, { size: 'MWS', yaw: 160 }), live: true, transition: 'whip' },
+]);
+return { scene, update: tl.update, shots };
+```
+
 ## Scenes
 
 A scene is a small JavaScript file built with the kit in [`kit.js`](kit.js): rooms, streets, furniture, cars, doors, props and jointed mannequins with poses. `kit.timeline()` adds character and object motion: walk paths, pose beats, keyframed moves, door swings, props passed from hand to hand, characters turning to look at each other.
@@ -44,6 +77,7 @@ A scene is a small JavaScript file built with the kit in [`kit.js`](kit.js): roo
 Demo scenes:
 - [`?scene=cafe-argument`](https://sirmobyi.github.io/camlink/?scene=cafe-argument): two people at a café table, one leans in and points.
 - [`?scene=street-pickup`](https://sirmobyi.github.io/camlink/?scene=street-pickup): a car pulls in, a woman carries a parcel over and loads it, a passer-by crosses behind.
+- [`beta/?scene=the-letter`](https://sirmobyi.github.io/camlink/beta/?scene=the-letter): someone walks in with a letter, it changes hands, the news lands. Comes with an eight-shot Auto camera.
 
 ![cafe-argument](docs/cafe.png)
 
@@ -92,12 +126,13 @@ Location: @Image 3. Action: [beats with seconds]. Background motion: [everything
 ```
 index.html      viewer: scene, recording, clean MP4 render, phone link
 phone.html      phone controller
-kit.js          blocking kit: set, props, mannequins, poses, timeline
+kit.js          blocking kit: set, props, mannequins, poses, timeline (beta adds shots, framing, coverage)
+favicon.svg     app icon
 scenes/         demo scenes (?scene=<name>)
 beta/           next version under test, live at /camlink/beta/
 blender/        Blender import script
 skill/          the Claude skill (.skill package and SKILL.md)
-docs/           README images
+docs/           README images and the logo (docs/logo)
 vendor/         three.js r160, PeerJS 1.5.4, mp4-muxer 5.1.3, qrcode-generator 1.4.4 (all MIT)
 ```
 
