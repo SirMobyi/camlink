@@ -334,7 +334,7 @@ const sendAll = (o) => { for (const c of conns) { try { c.send(o); } catch (e) {
 setInterval(() => sendAll({ t: 'state', rec: !!rec, el: rec ? (performance.now() - rec.t0) / 1000 : 0, mm: Math.round(mm), busy, scene: SCENE_NAME }), 250);
 
 // ---------- recording ----------
-let rec = null, busy = false, previewOn = false, previewT0 = 0, takeN = 0;
+let rec = null, busy = false, previewOn = false, previewT0 = 0, takeN = 0, fixedT = null;
 const takes = [];
 function pickMime() {
   for (const m of ['video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1', 'video/webm;codecs=vp9', 'video/webm', 'video/mp4'])
@@ -504,6 +504,7 @@ function frame(now) {
   let t = 0;
   if (rec) t = (now - rec.t0) / 1000;
   else if (previewOn) t = ((now - previewT0) / 1000) % DURATION;
+  else if (fixedT !== null) t = fixedT;
   update(t);
   renderer.render(scene, camera);
   if (rec) {
@@ -540,6 +541,10 @@ window.camlink = {
   get takes() { return takes.map(t => ({ name: t.name, duration: t.duration, clean: !!t.clean })); },
   camera, renderer, rig, calibrate, startRec, stopRec, renderClean: (i = 0) => renderClean(takes[i]),
   get scene() { return scene; },
+  // Hold the action at time t (seconds) to check a beat; seek(null) releases it.
+  seek: (t) => { fixedT = t === null ? null : +t; previewOn = false; $('previewBtn').classList.remove('on'); },
+  // Point the camera: framing([x,y,z], [tx,ty,tz], mm) for checks before the phone takes over.
+  framing: (pos, target, lens) => { if (rig.on) releaseToMouse(); camera.position.set(...pos); controls.target.set(...target); if (lens) mm = lens; controls.update(); },
 };
 </script>
 </body>
