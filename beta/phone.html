@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0c0d">
+<title>camlink camera</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Camera body: shutter in the middle, grip controls under the thumbs, settings as segmented rows. */
+  :root {
+    --ink: #0b0c0d; --well: #141518; --raise: #1c1e22; --line: #2a2d32; --mute: #80858d; --text: #ece9e4;
+    --amber: #f2c14e; --tally: #ff453a; --ok: #4cc38a;
+    --ui: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+  html, body { margin: 0; height: 100%; background: var(--ink); color: var(--text); font: 14px/1.4 var(--ui); overflow: hidden; touch-action: none; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  [hidden] { display: none !important; }
+
+  #ui { height: 100%; display: flex; flex-direction: column; gap: 14px;
+        padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  .top { display: flex; align-items: center; gap: 8px; font: 500 12px var(--mono); color: var(--mute); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #555; flex: none; }
+  .dot.ok { background: var(--ok); }
+  #conn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #tc { color: var(--mute); font-variant-numeric: tabular-nums; }
+  #tc.on { color: var(--tally); }
+
+  .readout { display: flex; justify-content: center; gap: 18px; font: 500 12px var(--mono); color: var(--mute); letter-spacing: .04em; }
+  .readout b { color: var(--text); font-weight: 500; }
+
+  .deck { display: flex; align-items: center; justify-content: center; gap: 28px; }
+  .round { width: 56px; height: 56px; border-radius: 50%; border: 1px solid var(--line); background: var(--well); display: grid; place-items: center; }
+  .round:active { background: var(--raise); }
+  .round svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .round.on { border-color: #f2c14e66; color: var(--amber); }
+  .cap { display: grid; justify-items: center; gap: 6px; font-size: 11px; color: var(--mute); }
+  #rec { width: 88px; height: 88px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; }
+  #rec i { width: 68px; height: 68px; border-radius: 50%; background: var(--tally); transition: all .15s; }
+  #rec.on i { width: 30px; height: 30px; border-radius: 6px; }
+  #rec:active i { transform: scale(.94); }
+
+  #hold { height: 56px; border-radius: 16px; border: 1px solid var(--line); background: var(--well); display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 500; }
+  #hold small { color: var(--mute); font-weight: 400; }
+  #hold.on { background: var(--amber); color: #111; border-color: var(--amber); }
+  #hold.on small { color: #111a; }
+
+  .set { display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 10px; }
+  .row > span { color: var(--mute); font-size: 12px; }
+  .seg { display: flex; background: var(--well); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; }
+  .seg button { flex: 1; height: 34px; border-radius: 7px; color: var(--mute); font-size: 13px; }
+  .seg button.on { background: var(--raise); color: var(--text); box-shadow: inset 0 0 0 1px #3a3e45; }
+  .seg.mono button { font: 500 12px var(--mono); }
+  #xrBtn { height: 34px; border-radius: 8px; border: 1px dashed var(--line); color: var(--mute); font-size: 12px; }
+  #xrBtn.on { color: var(--amber); border-color: #f2c14e66; }
+  #xsRow input { width: 100%; accent-color: var(--amber); }
+
+  .sticks { flex: 1; min-height: 150px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .stick { position: relative; width: 132px; height: 132px; border-radius: 50%; border: 1px solid var(--line); background: radial-gradient(circle, #17191c 0, #0f1012 72%); touch-action: none; }
+  .stick.v { width: 64px; border-radius: 32px; }
+  .stick::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: var(--line); }
+  .knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: #2b2e34; border: 1px solid #40444b; pointer-events: none; z-index: 1; }
+  .label { text-align: center; color: var(--mute); font-size: 11px; margin-top: 6px; }
+
+  #start { position: fixed; inset: 0; z-index: 5; background: var(--ink); display: grid; place-items: center; padding: 24px; text-align: center; }
+  #start .wrap { display: grid; gap: 14px; justify-items: center; max-width: 320px; }
+  #start .mark { font: 500 15px var(--mono); letter-spacing: .02em; }
+  #start p { margin: 0; color: var(--mute); }
+  #go { width: 88px; height: 88px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; margin: 8px 0; }
+  #go i { width: 68px; height: 68px; border-radius: 50%; background: var(--amber); display: grid; place-items: center; color: #111; font-weight: 600; font-style: normal; }
+  .warn { color: var(--amber); font-size: 12px; }
+
+  @media (orientation: landscape) and (max-height: 520px) {
+    #ui { display: grid; grid-template-columns: 150px 1fr 84px; grid-template-rows: auto auto auto auto 1fr; gap: 8px 16px; }
+    .top { grid-column: 1 / -1; }
+    .readout, .deck, #hold, .set { grid-column: 2; }
+    .deck { gap: 20px; } .round { width: 46px; height: 46px; } #rec { width: 68px; height: 68px; } #rec i { width: 52px; height: 52px; }
+    #hold { height: 44px; }
+    .set { gap: 6px; } .seg button { height: 28px; }
+    .sticks { display: contents; }
+    .sticks > div:first-child { grid-column: 1; grid-row: 2 / 6; align-self: end; }
+    .sticks > div:last-child { grid-column: 3; grid-row: 2 / 6; align-self: end; justify-self: end; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<script src="../vendor/peerjs.min.js"></script>
+</head>
+<body>
+<div id="start">
+  <div class="wrap">
+    <div class="mark">camlink</div>
+    <p>This phone becomes the camera. Hold it like one: landscape for 16:9, upright for 9:16.</p>
+    <button id="go" aria-label="Start"><i>Start</i></button>
+    <p class="warn" id="startMsg"></p>
+    <p class="warn" id="noId" hidden>Open camlink on your computer and scan its QR code to get here.</p>
+  </div>
+</div>
+
+<div id="ui">
+  <div class="top"><span class="dot" id="dot"></span><span id="conn">connecting…</span><span id="tc">STBY</span></div>
+  <div class="readout"><span>LENS <b id="lensTop">35</b>mm</span><span id="sceneTop"></span></div>
+
+  <div class="deck">
+    <div class="cap"><button class="round" id="play" aria-label="Rehearse the action"><svg viewBox="0 0 18 18"><path d="M5 3.5l9 5.5-9 5.5z" fill="currentColor" stroke="none"/></svg></button>Rehearse</div>
+    <button id="rec" aria-label="Record"><i></i></button>
+    <div class="cap"><button class="round" id="reset" aria-label="Reset to the first frame"><svg viewBox="0 0 18 18"><path d="M3.5 9a5.5 5.5 0 1 0 1.8-4.1"/><path d="M3 3v3.5h3.5"/></svg></button>Reset shot</div>
+  </div>
+
+  <button id="hold">Hold to reposition <small>camera stays put</small></button>
+
+  <div class="set">
+    <div class="row"><span>Lens</span><div class="seg mono" id="lensSeg"></div></div>
+    <div class="row"><span>Feel</span><div class="seg" id="feelSeg"></div></div>
+    <div class="row"><span>Move</span><div class="seg" id="spdSeg"></div></div>
+    <button id="xrBtn" hidden>Walk to move (AR, Android)</button>
+    <div class="row" id="xsRow" hidden><span>AR scale</span><input type="range" id="xs" min="0.25" max="6" step="0.05" value="1" aria-label="AR scale"></div>
+  </div>
+
+  <div class="sticks">
+    <div><div class="stick" id="moveStick"><div class="knob"></div></div><div class="label">dolly · truck</div></div>
+    <div><div class="stick v" id="liftStick"><div class="knob"></div></div><div class="label">up · down</div></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const S = { a: 0, b: 0, g: 0, has: false, mv: [0, 0, 0], spd: 0.8, mm: null, sm: 0.45, xs: 1, xr: null, xrOn: false,
+            viewer: null, viewerAt: 0, localRec: false, localT0: 0, needRecenter: false };
+const store = { get(k, d) { try { const v = localStorage.getItem('camlink.phone.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+                set(k, v) { try { localStorage.setItem('camlink.phone.' + k, JSON.stringify(v)); } catch (e) {} } };
+const buzz = (p) => { try { navigator.vibrate?.(p); } catch (e) {} };
+
+// ----- orientation -> quaternion (three.js camera convention: Y up, looking down -Z) -----
+function qmul(a, b) {
+  return [a[3]*b[0] + a[0]*b[3] + a[1]*b[2] - a[2]*b[1],
+          a[3]*b[1] - a[0]*b[2] + a[1]*b[3] + a[2]*b[0],
+          a[3]*b[2] + a[0]*b[1] - a[1]*b[0] + a[2]*b[3],
+          a[3]*b[3] - a[0]*b[0] - a[1]*b[1] - a[2]*b[2]];
+}
+function deviceQuat() {
+  const D = Math.PI / 180, x = S.b * D, y = S.a * D, z = -S.g * D;
+  const c1 = Math.cos(x/2), c2 = Math.cos(y/2), c3 = Math.cos(z/2), s1 = Math.sin(x/2), s2 = Math.sin(y/2), s3 = Math.sin(z/2);
+  let q = [s1*c2*c3 + c1*s2*s3, c1*s2*c3 - s1*c2*s3, c1*c2*s3 - s1*s2*c3, c1*c2*c3 + s1*s2*s3];
+  q = qmul(q, [-Math.SQRT1_2, 0, 0, Math.SQRT1_2]);
+  const o = ((screen.orientation && screen.orientation.angle) ?? window.orientation ?? 0) * D;
+  return qmul(q, [0, 0, Math.sin(-o/2), Math.cos(-o/2)]);
+}
+
+// ----- phone link (WebRTC via PeerJS) -----
+const viewerId = decodeURIComponent(location.hash.slice(1));
+const qs = new URLSearchParams(location.search);
+const peerOpts = { debug: 1, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } };
+if (qs.get('ph')) Object.assign(peerOpts, { host: qs.get('ph'), port: +(qs.get('pp') || 9000), path: qs.get('pt') || '/', secure: qs.get('ps') === '1' });
+let peer = null, conn = null, retry = null;
+function status(txt, ok) { $('conn').textContent = txt; $('dot').classList.toggle('ok', !!ok); }
+function connect() {
+  if (!viewerId) { status('no camlink code: scan the QR again'); return; }
+  if (!peer || peer.destroyed) {
+    peer = new Peer(undefined, peerOpts);
+    peer.on('open', dial);
+    peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
+    peer.on('error', (e) => {
+      if (e.type === 'peer-unavailable') status('computer not found: reload camlink there and rescan');
+      else status('link error: ' + e.type);
+      scheduleRetry();
+    });
+  } else if (peer.open) dial();
+}
+function dial() {
+  status('connecting…');
+  conn = peer.connect(viewerId, { serialization: 'json' });
+  conn.on('open', () => { status('linked', true); buzz(30); if (S.has || S.xrOn) S.needRecenter = true; });
+  conn.on('data', onData);
+  conn.on('close', () => { status('reconnecting…'); scheduleRetry(); });
+  conn.on('error', () => { status('reconnecting…'); scheduleRetry(); });
+}
+function scheduleRetry() { clearTimeout(retry); retry = setTimeout(connect, 2000); }
+function onData(m) {
+  if (!m || typeof m !== 'object' || m.t !== 'state') return;
+  S.viewer = m; S.viewerAt = performance.now();
+  if (S.mm === null && m.mm) markLens(m.mm);
+  $('lensTop').textContent = m.mm;
+  $('sceneTop').textContent = (m.scene || '').toUpperCase();
+  $('play').classList.toggle('on', !!m.playing);
+  if (m.busy) status('saving take…', true); else if (conn && conn.open) status('linked', true);
+}
+const send = (o) => { if (conn && conn.open) { try { conn.send(o); } catch (e) {} } };
+const fresh = () => S.viewer && performance.now() - S.viewerAt < 1500;
+const isRec = () => fresh() ? S.viewer.rec : S.localRec;
+const recElapsed = () => fresh() ? (S.viewer.el || 0) : (S.localRec ? (performance.now() - S.localT0) / 1000 : 0);
+
+setInterval(() => {
+  if (!S.has && !S.xrOn) return;
+  const q = S.xrOn && S.xr ? S.xr.q : deviceQuat();
+  send({ t: 'pose', q, xr: S.xrOn && S.xr ? S.xr.p : null, xs: S.xs, mv: S.mv, spd: S.spd, mm: S.mm, sm: S.sm });
+  if (S.needRecenter && (!S.xrOn || S.xr)) { S.needRecenter = false; send({ t: 'recenter' }); }
+}, 16);
+
+setInterval(() => {
+  const r = isRec(), t = recElapsed();
+  $('rec').classList.toggle('on', r); $('rec').setAttribute('aria-label', r ? 'Stop recording' : 'Record');
+  $('tc').classList.toggle('on', r);
+  const s = t % 60;
+  $('tc').textContent = r ? `REC ${String(Math.floor(t / 60)).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}` : 'STBY';
+}, 100);
+
+// ----- start / permissions -----
+$('go').onclick = async () => {
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const p = await DeviceOrientationEvent.requestPermission();
+      if (p !== 'granted') { $('startMsg').textContent = 'Motion access was denied. Settings → Safari → Motion & Orientation Access, then reload.'; return; }
+    }
+  } catch (e) { $('startMsg').textContent = 'Permission error: ' + e.message; return; }
+  if (!window.isSecureContext) { $('startMsg').textContent = 'Open this page over https:// (scan the QR code).'; return; }
+  addEventListener('deviceorientation', (e) => {
+    if (e.alpha === null) return;
+    S.a = e.alpha; S.b = e.beta; S.g = e.gamma;
+    if (!S.has) { S.has = true; S.needRecenter = true; }
+  });
+  try { await navigator.wakeLock?.request('screen'); } catch (e) {}
+  $('start').hidden = true;
+  connect();
+  setTimeout(() => { if (!S.has && !S.xrOn) status('no motion sensor events: allow Motion & Orientation in Safari settings'); }, 2500);
+};
+
+// ----- controls -----
+$('rec').onclick = () => {
+  const on = !isRec();
+  S.localRec = on; if (on) S.localT0 = performance.now();
+  send({ t: 'rec', on }); buzz(on ? 60 : [30, 40, 30]);
+};
+$('play').onclick = () => { send({ t: 'play' }); buzz(15); };
+$('reset').onclick = () => { send({ t: 'reset' }); buzz(20); };
+
+// Hold to reposition: the shot freezes while held; on release the phone's new pointing becomes "straight ahead".
+const hold = $('hold');
+const holdOn = (e) => { e.preventDefault(); try { hold.setPointerCapture(e.pointerId); } catch (_) {} if (hold.classList.contains('on')) return; hold.classList.add('on'); send({ t: 'hold', on: true }); buzz(15); };
+const holdOff = () => { if (!hold.classList.contains('on')) return; hold.classList.remove('on'); send({ t: 'hold', on: false }); buzz(10); };
+hold.addEventListener('pointerdown', holdOn);
+['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => hold.addEventListener(ev, holdOff));
+
+function seg(el, items, current, onPick, key) {
+  el.innerHTML = items.map(([label, v]) => `<button data-v="${v}">${label}</button>`).join('');
+  const mark = (v) => el.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.v === +v));
+  el.querySelectorAll('button').forEach((b) => b.onclick = () => { mark(b.dataset.v); onPick(+b.dataset.v); if (key) store.set(key, +b.dataset.v); buzz(8); });
+  if (current !== null) mark(current);
+  return mark;
+}
+const LENSES = [16, 24, 35, 50, 85];
+const markLensBtn = seg($('lensSeg'), LENSES.map((l) => [String(l), l]), null, (v) => { S.mm = v; $('lensTop').textContent = v; });
+function markLens(v) { const n = LENSES.reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a); markLensBtn(n); }
+S.sm = store.get('feel', 0.45);
+seg($('feelSeg'), [['Raw', 0.1], ['Handheld', 0.45], ['Steady', 0.72], ['Gimbal', 0.9]], S.sm, (v) => S.sm = v, 'feel');
+S.spd = store.get('spd', 0.8);
+seg($('spdSeg'), [['Slow', 0.35], ['Walk', 0.8], ['Fast', 2], ['Drone', 5]], S.spd, (v) => S.spd = v, 'spd');
+$('xs').oninput = (e) => { S.xs = +e.target.value; };
+
+function stick(el, onMove, vertical) {
+  const knob = el.querySelector('.knob'); let id = null;
+  const upd = (e) => {
+    const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const R = (vertical ? r.height : r.width) / 2 - 20;
+    let dx = vertical ? 0 : e.clientX - cx, dy = e.clientY - cy;
+    const d = Math.hypot(dx, dy); if (d > R) { dx *= R / d; dy *= R / d; }
+    knob.style.transform = `translate(${dx}px,${dy}px)`;
+    const nx = dx / R, ny = -dy / R, dead = 0.12;
+    const f = (v) => Math.abs(v) < dead ? 0 : Math.sign(v) * ((Math.abs(v) - dead) / (1 - dead)) ** 1.6;
+    onMove(f(nx), f(ny));
+  };
+  el.addEventListener('pointerdown', (e) => { id = e.pointerId; try { el.setPointerCapture(id); } catch (_) {} upd(e); });
+  el.addEventListener('pointermove', (e) => { if (e.pointerId === id) upd(e); });
+  const end = (e) => { if (e.pointerId !== id) return; id = null; knob.style.transform = ''; onMove(0, 0); };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+}
+stick($('moveStick'), (x, y) => { S.mv[0] = x; S.mv[1] = y; });
+stick($('liftStick'), (x, y) => { S.mv[2] = y; }, true);
+
+// ----- WebXR 6DoF (Android Chrome with ARCore) -----
+(async () => { try { if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar')) $('xrBtn').hidden = false; } catch (e) {} })();
+$('xrBtn').onclick = async () => {
+  if (S.xrOn) { S.session?.end(); return; }
+  try {
+    const session = await navigator.xr.requestSession('immersive-ar', { optionalFeatures: ['dom-overlay'], domOverlay: { root: $('ui') } });
+    const gl = document.createElement('canvas').getContext('webgl', { xrCompatible: true });
+    session.updateRenderState({ baseLayer: new XRWebGLLayer(session, gl) });
+    const ref = await session.requestReferenceSpace('local');
+    S.session = session; S.xrOn = true; S.xr = null; S.needRecenter = true;
+    $('xrBtn').textContent = 'Stop walking mode'; $('xrBtn').classList.add('on'); $('xsRow').hidden = false;
+    const onFrame = (t, frame) => {
+      session.requestAnimationFrame(onFrame);
+      const layer = session.renderState.baseLayer;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+      const p = frame.getViewerPose(ref);
+      if (p) { const o = p.transform.orientation, x = p.transform.position; S.xr = { q: [o.x, o.y, o.z, o.w], p: [x.x, x.y, x.z] }; }
+    };
+    session.requestAnimationFrame(onFrame);
+    session.addEventListener('end', () => { S.xrOn = false; S.xr = null; S.session = null; S.needRecenter = true;
+      $('xrBtn').textContent = 'Walk to move (AR, Android)'; $('xrBtn').classList.remove('on'); $('xsRow').hidden = true; });
+  } catch (e) { status('AR failed: ' + e.message); }
+};
+if (!viewerId) $('noId').hidden = false;
+</script>
+</body>
+</html>

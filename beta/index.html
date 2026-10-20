@@ -1,0 +1,847 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>camlink</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Monitor layout: picture first, one transport bar under it, everything else tucked into popovers. */
+  :root {
+    --ink: #0b0c0d;        /* page */
+    --well: #121315;       /* surfaces */
+    --raise: #1a1c1f;      /* controls */
+    --line: #26292d;
+    --mute: #7d828a;
+    --text: #e8e6e1;
+    --amber: #f2c14e;      /* active state, guides, playhead */
+    --tally: #ff453a;      /* recording only */
+    --ok: #4cc38a;
+    --ui: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --r: 8px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--ink); color: var(--text); font: 13px/1.45 var(--ui); -webkit-font-smoothing: antialiased; }
+  button, select, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  #app { height: 100%; display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+
+  /* top bar */
+  header { display: flex; align-items: center; gap: 12px; padding: 10px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); }
+  .brand { font: 500 13px var(--mono); letter-spacing: .02em; }
+  .brand span { color: var(--mute); }
+  #sceneName { color: var(--text); }
+  header .spacer { flex: 1; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--text); white-space: nowrap; }
+  .chip:hover { border-color: #3a3e44; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mute); }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 0 3px #4cc38a22; }
+  .badge { font: 500 11px var(--mono); color: var(--ink); background: var(--text); border-radius: 999px; padding: 0 6px; line-height: 16px; }
+  .iconbtn { width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 50%; border: 1px solid var(--line); background: transparent; }
+
+  /* stage */
+  main { position: relative; min-height: 0; display: grid; place-items: center; padding: 4px max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); }
+  #frame { position: relative; background: #000; border-radius: 4px; overflow: hidden; box-shadow: 0 0 0 1px var(--line), 0 24px 60px -30px #000; }
+  #frame canvas { display: block; width: 100%; height: 100%; }
+  .ovl { position: absolute; inset: 0; pointer-events: none; }
+  #thirds line { stroke: #fff; stroke-opacity: .4; stroke-width: 1; vector-effect: non-scaling-stroke; }
+  #crop .mask { fill: #000; fill-opacity: .55; }
+  #crop .edge { fill: none; stroke: var(--amber); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+  #crop text { fill: var(--amber); font: 500 11px var(--mono); }
+  .hud { position: absolute; font: 500 11.5px var(--mono); letter-spacing: .04em; color: #fff; text-shadow: 0 1px 2px #000a; pointer-events: none; display: flex; gap: 10px; align-items: center; }
+  .hud.tl { left: 12px; top: 10px; } .hud.tr { right: 12px; top: 10px; } .hud.bl { left: 12px; bottom: 10px; } .hud.br { right: 12px; bottom: 10px; }
+  .tally { display: inline-flex; align-items: center; gap: 6px; color: #fff; }
+  .tally i { width: 8px; height: 8px; border-radius: 50%; background: #fff6; }
+  .tally.on { color: var(--tally); } .tally.on i { background: var(--tally); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  #busy { position: absolute; inset: 0; background: #000c; display: none; place-items: center; padding: 24px; font: 13px var(--mono); text-align: center; }
+  #busy.on { display: grid; }
+  #busy .bar { width: min(320px, 70%); height: 2px; background: #ffffff22; margin: 12px auto 0; }
+  #busy .bar i { display: block; height: 100%; background: var(--amber); width: 0; }
+  #drop { position: absolute; inset: 0; border: 1.5px dashed var(--amber); border-radius: 6px; background: #f2c14e10; display: none; place-items: center; color: var(--amber); pointer-events: none; }
+  #drop.on { display: grid; }
+
+  /* transport */
+  footer { padding: 12px max(16px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); display: grid; justify-items: center; gap: 10px; }
+  .transport, .tools { width: var(--fw, 100%); max-width: 100%; display: flex; align-items: center; gap: 10px; }
+  .rec { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 2px solid #fff; background: transparent; display: grid; place-items: center; }
+  .rec i { width: 26px; height: 26px; border-radius: 50%; background: var(--tally); transition: all .15s; }
+  .rec.on i { width: 14px; height: 14px; border-radius: 3px; }
+  .play { width: 32px; height: 32px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: transparent; display: grid; place-items: center; }
+  .play svg { width: 12px; height: 12px; fill: currentColor; }
+  #track { position: relative; flex: 1; height: 32px; cursor: pointer; touch-action: none; }
+  #track .rail { position: absolute; left: 0; right: 0; top: 15px; height: 2px; background: var(--line); border-radius: 2px; }
+  #track .fill { position: absolute; left: 0; top: 15px; height: 2px; background: var(--mute); border-radius: 2px; }
+  #track .mk { position: absolute; top: 10px; width: 1px; height: 12px; background: #ffffff55; }
+  #track .head { position: absolute; top: 6px; width: 2px; height: 20px; margin-left: -1px; background: var(--amber); border-radius: 1px; }
+  #track.rec .head { background: var(--tally); }
+  .time { font: 500 12px var(--mono); color: var(--mute); min-width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
+  .time b { color: var(--text); font-weight: 500; }
+  .tools { flex-wrap: wrap; gap: 6px; }
+  .tools .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+  .tools .spacer { flex: 1; }
+  .seg { display: inline-flex; align-items: center; gap: 2px; }
+  .lbl { color: var(--mute); font-size: 12px; margin-right: 4px; }
+  .t { height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--mute); }
+  .t:hover { color: var(--text); background: var(--raise); }
+  .t.on { color: var(--amber); background: #f2c14e14; border-color: #f2c14e40; }
+  select.t { appearance: none; padding-right: 22px; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(-45deg, transparent 50%, currentColor 50%); background-position: right 11px top 13px, right 7px top 13px; background-size: 4px 4px; background-repeat: no-repeat; }
+  select.t option { background: var(--well); color: var(--text); }
+
+  /* popovers and drawer */
+  .pop { position: absolute; z-index: 20; top: 6px; right: max(16px, env(safe-area-inset-right)); width: 300px; max-width: calc(100vw - 32px); background: var(--well); border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: 0 20px 50px -20px #000; }
+  .pop h3 { margin: 0 0 4px; font: 600 14px var(--ui); }
+  .pop p { margin: 0; color: var(--mute); }
+  .qr { background: #fff; border-radius: 10px; padding: 10px; width: 176px; height: 176px; margin: 14px auto; display: grid; place-items: center; color: #000; font-size: 12px; text-align: center; }
+  .qr img { width: 156px; height: 156px; image-rendering: pixelated; }
+  .steps { margin: 0; padding-left: 18px; color: var(--mute); display: grid; gap: 4px; }
+  .steps b { color: var(--text); font-weight: 500; }
+  .url { font: 11px var(--mono); color: var(--mute); word-break: break-all; margin-top: 10px; }
+  .menu { width: 240px; padding: 6px; }
+  .menu button, .menu label { display: flex; width: 100%; align-items: center; gap: 10px; padding: 9px 10px; border: 0; background: none; border-radius: 6px; text-align: left; color: var(--text); }
+  .menu button:hover, .menu label:hover { background: var(--raise); }
+  .menu hr { border: 0; border-top: 1px solid var(--line); margin: 6px 4px; }
+  .menu .k { margin-left: auto; color: var(--mute); font: 11px var(--mono); }
+  #drawer { position: absolute; z-index: 15; top: 0; right: 0; bottom: 0; width: min(360px, 100%); background: var(--well); border-left: 1px solid var(--line); padding: 16px max(16px, env(safe-area-inset-right)) 16px 16px; overflow: auto; transform: translateX(100%); transition: transform .2s ease; }
+  #drawer.open { transform: none; }
+  #drawer h3 { margin: 0 0 12px; font: 600 14px var(--ui); display: flex; align-items: center; }
+  #drawer h3 button { margin-left: auto; }
+  .take { display: grid; grid-template-columns: 96px 1fr; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .take img, .take .ph { width: 96px; aspect-ratio: 16/9; object-fit: cover; border-radius: 4px; background: var(--raise); }
+  .take .name { font: 500 12px var(--mono); word-break: break-all; }
+  .take .meta { color: var(--mute); font-size: 12px; }
+  .take .acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+  .take .acts button { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line); background: transparent; font-size: 12px; }
+  .take .acts button.primary { border-color: #f2c14e55; color: var(--amber); }
+  .empty { color: var(--mute); padding: 8px 0; }
+  #toast { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translate(-50%, 20px); opacity: 0; background: var(--text); color: var(--ink); padding: 8px 14px; border-radius: 999px; font-weight: 500; transition: all .2s; pointer-events: none; z-index: 30; }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+  #help { position: absolute; z-index: 25; inset: 0; background: #000a; display: grid; place-items: center; }
+  #help .card { background: var(--well); border: 1px solid var(--line); border-radius: 12px; padding: 20px; width: min(420px, calc(100vw - 32px)); }
+  #help dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 12px 0 0; }
+  #help dt { font: 500 12px var(--mono); color: var(--amber); }
+  #help dd { margin: 0; color: var(--mute); }
+
+  @media (max-width: 720px) {
+    .brand .scene-sep, #sceneName { display: none; }
+    .tools .lbl { display: none; }
+    .time { min-width: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "../vendor/three/build/three.module.js",
+  "three/addons/": "../vendor/three/examples/jsm/"
+} }
+</script>
+<script src="../vendor/qrcode.js"></script>
+<script src="../vendor/peerjs.min.js"></script>
+<script src="../vendor/mp4-muxer.js"></script>
+<script>
+  function camlinkFail(msg) {
+    if (window.__camlinkFailed) return;
+    window.__camlinkFailed = true;
+    const b = document.getElementById('busy'), t = document.getElementById('busyTxt');
+    if (!b || !t) return;
+    t.style.cssText = 'max-width:520px;white-space:pre-wrap;text-align:left;color:#ffb4ae';
+    t.textContent = 'camlink hit a problem\n\n' + msg + '\n\nIf this mentions WebGL, your browser has 3D graphics turned off (Brave: lower Shields for this site or enable graphics acceleration). Chrome, Safari and the Claude app browser work out of the box.';
+    b.classList.add('on');
+  }
+  addEventListener('error', (e) => { if (!window.camlink) camlinkFail(e.message || String(e.error)); });
+  addEventListener('unhandledrejection', (e) => { if (!window.camlink) camlinkFail(String(e.reason && e.reason.message || e.reason)); });
+  setTimeout(() => { if (!window.camlink) camlinkFail('Timed out starting the viewer (no error reported).'); }, 12000);
+</script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">camlink <span class="scene-sep">/</span> <span id="sceneName">loading…</span></div>
+    <div class="spacer"></div>
+    <button class="chip" id="phoneChip" aria-haspopup="dialog"><span class="dot" id="phoneDot"></span><span id="phoneLabel">Connect phone</span></button>
+    <button class="chip" id="takesChip">Takes <span class="badge" id="takeCount">0</span></button>
+    <button class="iconbtn" id="moreBtn" aria-label="More" aria-haspopup="menu">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><circle cx="2.5" cy="7" r="1.4"/><circle cx="7" cy="7" r="1.4"/><circle cx="11.5" cy="7" r="1.4"/></svg>
+    </button>
+  </header>
+
+  <main id="stage">
+    <div id="frame">
+      <canvas id="c"></canvas>
+      <svg class="ovl" id="thirds" viewBox="0 0 100 100" preserveAspectRatio="none" hidden>
+        <line x1="33.333" y1="0" x2="33.333" y2="100"/><line x1="66.667" y1="0" x2="66.667" y2="100"/>
+        <line x1="0" y1="33.333" x2="100" y2="33.333"/><line x1="0" y1="66.667" x2="100" y2="66.667"/>
+      </svg>
+      <svg class="ovl" id="crop" hidden></svg>
+      <div class="hud tl"><span class="tally" id="tally"><i></i><span id="tallyTxt">STBY</span></span></div>
+      <div class="hud tr"><span id="hudLens">35mm</span><span id="hudFmt">16:9</span></div>
+      <div class="hud bl"><span id="hudMode">MOUSE</span><span id="hudRig"></span></div>
+      <div id="busy"><div><div id="busyTxt">Rendering…</div><div class="bar"><i id="busyBar"></i></div></div></div>
+    </div>
+    <div id="drop">Drop a scene (.js) or a model (.glb)</div>
+
+    <div class="pop" id="pairPop" role="dialog" aria-label="Connect your phone" hidden>
+      <h3>Connect your phone</h3>
+      <p>Scan with the phone camera. Any network works.</p>
+      <div class="qr" id="qr">Connecting…</div>
+      <ol class="steps">
+        <li>Tap <b>Start</b> and allow motion.</li>
+        <li>Frame with the mouse, then move the phone. Hold <b>Reposition</b> on the phone to re-grip without moving the shot.</li>
+        <li>Tap the red button to record.</li>
+      </ol>
+      <div class="url" id="phoneUrl"></div>
+    </div>
+
+    <div class="pop menu" id="moreMenu" role="menu" hidden>
+      <button id="copyLink" role="menuitem">Copy scene link</button>
+      <button id="openFile" role="menuitem">Open scene or model…</button>
+      <button id="glbBtn" role="menuitem">Export scene as .glb</button>
+      <hr>
+      <label><input type="checkbox" id="autoClean" checked> Save clean MP4 after each take</label>
+      <label><input type="checkbox" id="autoStop" checked> Stop recording when the action ends</label>
+      <label><input type="checkbox" id="autoReturn" checked> Return to first frame after a take</label>
+      <hr>
+      <button id="helpBtn" role="menuitem">Keyboard shortcuts <span class="k">?</span></button>
+    </div>
+    <input type="file" id="fileIn" accept=".js,.mjs,.glb,.gltf" multiple hidden>
+
+    <aside id="drawer" aria-label="Takes">
+      <h3>Takes <button class="iconbtn" id="closeDrawer" aria-label="Close">✕</button></h3>
+      <div id="takes"><div class="empty">No takes yet. Each take saves a clean MP4 to your Downloads.</div></div>
+    </aside>
+
+    <div id="help" hidden>
+      <div class="card">
+        <h3 style="margin:0;font:600 14px var(--ui)">Shortcuts</h3>
+        <dl>
+          <dt>R</dt><dd>Record / stop</dd>
+          <dt>Space</dt><dd>Play / pause the action</dd>
+          <dt>← →</dt><dd>Step 0.1 s (Shift: 1 s)</dd>
+          <dt>Home</dt><dd>Back to 0 s</dd>
+          <dt>M</dt><dd>Switch mouse / phone</dd>
+          <dt>H</dt><dd>Reset shot to the first frame</dd>
+          <dt>G</dt><dd>Thirds grid</dd>
+          <dt>[ ]</dt><dd>Lens (mouse mode)</dd>
+          <dt>S</dt><dd>Save a still of this frame</dd>
+        </dl>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="transport">
+      <button class="rec" id="recBtn" aria-label="Record"><i></i></button>
+      <button class="play" id="playBtn" aria-label="Play action"><svg viewBox="0 0 12 12" id="playIcon"><path d="M2 1l9 5-9 5z"/></svg></button>
+      <div id="track" role="slider" aria-label="Action time" tabindex="0">
+        <div class="rail"></div><div class="fill" id="trackFill"></div><div id="marks"></div><div class="head" id="head"></div>
+      </div>
+      <div class="time"><b id="tNow">0.0</b> / <span id="tDur">8.0</span> s</div>
+    </div>
+    <div class="tools">
+      <span class="lbl">Camera move</span>
+      <select class="t" id="rig" aria-label="Camera move">
+        <option value="none">None</option>
+        <option value="push">Push in</option>
+        <option value="pull">Pull out</option>
+        <option value="truckL">Truck left</option>
+        <option value="truckR">Truck right</option>
+        <option value="craneUp">Crane up</option>
+        <option value="craneDown">Crane down</option>
+        <option value="orbitL">Orbit left</option>
+        <option value="orbitR">Orbit right</option>
+      </select>
+      <select class="t" id="rigAmt" aria-label="Move size"><option value="0.5">Subtle</option><option value="1" selected>Medium</option><option value="1.8">Big</option></select>
+      <span class="sep"></span>
+      <span class="lbl">Guides</span>
+      <button class="t" id="gThirds" aria-pressed="false">Thirds</button>
+      <button class="t" id="g916" aria-pressed="false">9:16</button>
+      <button class="t" id="g45" aria-pressed="false">4:5</button>
+      <button class="t" id="g11" aria-pressed="false">1:1</button>
+      <span class="sep"></span>
+      <select class="t" id="aspect" aria-label="Aspect ratio">
+        <option value="16:9">16:9</option><option value="9:16">9:16</option><option value="2.39:1">2.39:1</option><option value="1:1">1:1</option><option value="4:5">4:5</option>
+      </select>
+      <select class="t" id="quality" aria-label="Resolution"><option value="720">720p</option><option value="1080" selected>1080p</option></select>
+      <select class="t" id="fps" aria-label="Realtime frame rate"><option value="24">24 fps</option><option value="30" selected>30 fps</option></select>
+      <span class="spacer"></span>
+      <button class="t" id="stillBtn" title="Save this frame as PNG (S)">Save still</button>
+      <button class="t" id="modeBtn" title="Switch mouse / phone (M)">Use phone</button>
+    </div>
+  </footer>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import * as kit from './kit.js';
+
+const $ = (id) => document.getElementById(id);
+const V3 = THREE.Vector3, Q = THREE.Quaternion, UP = new V3(0, 1, 0);
+const params = new URLSearchParams(location.search);
+const store = { get(k, d) { try { const v = localStorage.getItem('camlink.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+                set(k, v) { try { localStorage.setItem('camlink.' + k, JSON.stringify(v)); } catch (e) {} } };
+let toastTimer;
+function toast(msg) { $('toast').textContent = msg; $('toast').classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('on'), 2200); }
+
+// ---------- scene codec (#scene=<deflate-raw base64url>) ----------
+async function encodeScene(text) {
+  const buf = await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer();
+  let s = ''; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function decodeScene(b64) {
+  b64 = b64.replace(/-/g, '+').replace(/_/g, '/'); while (b64.length % 4) b64 += '=';
+  const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  return await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+}
+
+// ---------- renderer / camera ----------
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.setPixelRatio(1);
+const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.03, 500);
+camera.filmGauge = 36;
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+let mm = 35;
+
+let scene = new THREE.Scene(), update = () => {}, SCENE_NAME = 'scene', DURATION = 8, sceneCode = '', markers = [];
+const home = { pos: new V3(0, 1.6, 5), q: new Q(), target: new V3(0, 1, 0), mm: 35 };
+function saveHome() { home.pos.copy(camera.position); home.q.copy(camera.quaternion); home.target.copy(controls.target); home.mm = mm; }
+function goHome() {
+  camera.position.copy(home.pos); camera.quaternion.copy(home.q); controls.target.copy(home.target); mm = home.mm;
+  if (rig.on) calibrate(true); else controls.update();
+}
+
+async function loadSceneModule(code, { keepCamera = false, label = '' } = {}) {
+  const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+  let mod;
+  try { mod = await import(url); } finally { URL.revokeObjectURL(url); }
+  const built = await mod.build({ THREE, kit });
+  scene = built.scene; update = built.update || (() => {});
+  SCENE_NAME = (built.name || mod.name || label || 'scene').replace(/[^A-Za-z0-9_-]/g, '_');
+  DURATION = built.duration || mod.duration || 8;
+  markers = (built.markers || update.markers?.() || []).filter((t) => t < DURATION);
+  sceneCode = code;
+  $('sceneName').textContent = SCENE_NAME;
+  document.title = SCENE_NAME + ' · camlink';
+  $('tDur').textContent = DURATION.toFixed(1);
+  $('marks').innerHTML = markers.map((t) => `<div class="mk" style="left:${(t / DURATION) * 100}%" title="${t.toFixed(1)} s"></div>`).join('');
+  if (!keepCamera) {
+    const c0 = built.camera || { pos: [0, 1.6, 5], target: [0, 1, 0], mm: 35 };
+    camera.position.set(...c0.pos); controls.target.set(...(c0.target || [0, 1, 0])); mm = c0.mm || 35;
+    camera.setFocalLength(mm); controls.update(); saveHome();
+    if (rig.on) calibrate(true);
+  }
+  setTime(0);
+}
+async function setSceneFromCode(code, opts = {}) {
+  try {
+    await loadSceneModule(code, opts);
+    history.replaceState(null, '', location.pathname + location.search + '#scene=' + await encodeScene(code));
+    return { ok: true, name: SCENE_NAME, link: location.href };
+  } catch (e) { showError('Scene error: ' + (e && e.message || e)); return { ok: false, error: String(e && e.message || e) }; }
+}
+function showError(msg) {
+  $('busyTxt').style.cssText = 'max-width:520px;white-space:pre-wrap;text-align:left;color:#ffb4ae';
+  $('busyTxt').textContent = msg + '\n\nClick to dismiss.';
+  $('busyBar').parentElement.hidden = true;
+  $('busy').classList.add('on');
+  $('busy').onclick = () => { $('busy').classList.remove('on'); $('busyTxt').style.cssText = ''; $('busyBar').parentElement.hidden = false; $('busy').onclick = null; };
+}
+
+// ---------- format + guides ----------
+const ASPECTS = { '16:9': [16, 9], '9:16': [9, 16], '2.39:1': [2.39, 1], '1:1': [1, 1], '4:5': [4, 5] };
+let RES = [1920, 1080];
+function setFormat() {
+  const [a, b] = ASPECTS[$('aspect').value], short = +$('quality').value;
+  let w, h;
+  if (a >= b) { h = short; w = Math.round(short * a / b); } else { w = short; h = Math.round(short * b / a); }
+  w -= w % 2; h -= h % 2;
+  RES = [w, h];
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h; camera.setFocalLength(mm);
+  $('hudFmt').textContent = $('aspect').value;
+  fit(); drawCrop();
+  store.set('fmt', { aspect: $('aspect').value, quality: $('quality').value, fps: $('fps').value });
+}
+function fit() {
+  const el = $('stage'), cs = getComputedStyle(el);
+  const st = { width: el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), height: el.clientHeight - parseFloat(cs.paddingTop) - 16 };
+  const s = Math.max(0.05, Math.min(st.width / RES[0], st.height / RES[1]));
+  const w = Math.floor(RES[0] * s), h = Math.floor(RES[1] * s);
+  $('frame').style.width = w + 'px'; $('frame').style.height = h + 'px';
+  document.documentElement.style.setProperty('--fw', Math.min(st.width, Math.max(w, 640)) + 'px');
+}
+addEventListener('resize', fit);
+['aspect', 'quality'].forEach((id) => $(id).addEventListener('change', () => { if (!rec) setFormat(); }));
+$('fps').addEventListener('change', setFormat);
+
+const guides = store.get('guides', { thirds: false, crop: null });
+function drawCrop() {
+  const svg = $('crop');
+  const crops = { '9:16': 9 / 16, '4:5': 4 / 5, '1:1': 1 };
+  ['g916', 'g45', 'g11'].forEach((id) => { const on = { g916: '9:16', g45: '4:5', g11: '1:1' }[id] === guides.crop; $(id).classList.toggle('on', on); $(id).setAttribute('aria-pressed', on); });
+  $('gThirds').classList.toggle('on', guides.thirds); $('gThirds').setAttribute('aria-pressed', guides.thirds);
+  $('thirds').toggleAttribute('hidden', !guides.thirds);
+  if (!guides.crop) { svg.setAttribute('hidden', ''); return; }
+  const [W, H] = RES, r = crops[guides.crop];
+  let cw = H * r, ch = H; if (cw > W) { cw = W; ch = W / r; }
+  const x = (W - cw) / 2, y = (H - ch) / 2;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('preserveAspectRatio', 'none');
+  svg.innerHTML = `<path class="mask" fill-rule="evenodd" d="M0 0H${W}V${H}H0Z M${x} ${y}V${y + ch}H${x + cw}V${y}Z"/>
+    <rect class="edge" x="${x}" y="${y}" width="${cw}" height="${ch}"/>
+    <text x="${x + 10}" y="${y + 22}" style="font-size:${Math.round(H / 40)}px">${guides.crop}</text>`;
+  svg.removeAttribute('hidden');
+}
+function setGuide(kind) {
+  if (kind === 'thirds') guides.thirds = !guides.thirds; else guides.crop = guides.crop === kind ? null : kind;
+  store.set('guides', guides); drawCrop();
+}
+$('gThirds').onclick = () => setGuide('thirds');
+$('g916').onclick = () => setGuide('9:16');
+$('g45').onclick = () => setGuide('4:5');
+$('g11').onclick = () => setGuide('1:1');
+
+// ---------- scripted moves (rigs) ----------
+// A move runs over the scene's duration from the framing at play/REC start. With the phone, the move
+// carries the camera position (a dolly or crane under the operator); the phone still aims.
+const smooth = (x) => x * x * (3 - 2 * x);
+let rigStart = null;
+function captureRigStart() {
+  const fwd = new V3(0, 0, -1).applyQuaternion(camera.quaternion);
+  const dist = rig.on ? 3 : Math.max(0.5, camera.position.distanceTo(controls.target));
+  rigStart = { pos: camera.position.clone(), q: camera.quaternion.clone(), target: camera.position.clone().addScaledVector(fwd, dist), dist, fwd, right: new V3(1, 0, 0).applyQuaternion(camera.quaternion).setY(0).normalize() };
+}
+function rigOffset(t) {
+  const kind = $('rig').value; if (kind === 'none' || !rigStart) return null;
+  const u = smooth(THREE.MathUtils.clamp(t / DURATION, 0, 1)), k = +$('rigAmt').value, s = rigStart;
+  const o = new V3();
+  if (kind === 'push') o.addScaledVector(s.fwd, s.dist * 0.45 * k * u);
+  if (kind === 'pull') o.addScaledVector(s.fwd, -s.dist * 0.45 * k * u);
+  if (kind === 'truckL') o.addScaledVector(s.right, -1.6 * k * u);
+  if (kind === 'truckR') o.addScaledVector(s.right, 1.6 * k * u);
+  if (kind === 'craneUp') o.y += 1.4 * k * u;
+  if (kind === 'craneDown') o.y -= Math.min(1.0 * k * u, s.pos.y - 0.25);
+  if (kind === 'orbitL' || kind === 'orbitR') {
+    const rel = s.pos.clone().sub(s.target), ang = (kind === 'orbitL' ? -1 : 1) * 0.6 * k * u;
+    o.copy(rel.clone().applyAxisAngle(UP, ang).sub(rel));
+  }
+  return { o, aim: kind.startsWith('orbit') || kind.startsWith('crane') };
+}
+function applyRigMouse(t) {
+  const r = rigOffset(t); if (!r) return false;
+  camera.position.copy(rigStart.pos).add(r.o);
+  if (r.aim) camera.lookAt(rigStart.target); else camera.quaternion.copy(rigStart.q);
+  return true;
+}
+function endRig() { if (rigStart && !rig.on && $('rig').value !== 'none') { camera.position.copy(rigStart.pos); camera.quaternion.copy(rigStart.q); } rigStart = null; }
+$('rig').addEventListener('change', () => { $('hudRig').textContent = $('rig').value === 'none' ? '' : $('rig').selectedOptions[0].text.toUpperCase(); store.set('rig', [$('rig').value, $('rigAmt').value]); });
+$('rigAmt').addEventListener('change', () => store.set('rig', [$('rig').value, $('rigAmt').value]));
+
+// ---------- phone rig ----------
+const yawOf = (q) => { const f = new V3(0, 0, -1).applyQuaternion(q); return Math.atan2(-f.x, -f.z); };
+const rig = { on: false, hold: false, base: new V3(), qOff: new Q(), xrRef: null, joy: new V3(), tq: new Q(), tp: new V3() };
+let pose = null;
+function calibrate(silent) {
+  if (!pose) return;
+  if (!rig.on) saveHome();
+  const pq = new Q(...pose.q);
+  rig.base.copy(camera.position);
+  rig.qOff.setFromAxisAngle(UP, yawOf(camera.quaternion) - yawOf(pq));
+  rig.xrRef = pose.xr ? new V3(...pose.xr) : null;
+  rig.joy.set(0, 0, 0);
+  rig.on = true; controls.enabled = false;
+  setModeLabel();
+}
+function releaseToMouse() {
+  rig.on = false;
+  const f = new V3(0, 0, -1).applyQuaternion(camera.quaternion);
+  controls.target.copy(camera.position).addScaledVector(f, 2.5);
+  controls.enabled = true; setModeLabel();
+}
+function setModeLabel() {
+  $('hudMode').textContent = rig.on ? (rig.hold ? 'PHONE · HOLD' : 'PHONE') : 'MOUSE';
+  $('modeBtn').textContent = rig.on ? 'Use mouse' : 'Use phone';
+  $('modeBtn').disabled = !rig.on && !pose;
+  $('modeBtn').style.opacity = $('modeBtn').disabled ? .4 : 1;
+}
+function stepRig(dt, rigO) {
+  if (!rig.on || !pose || rig.hold) return;
+  const pq = new Q(...pose.q);
+  rig.tq.copy(rig.qOff).multiply(pq);
+  const yaw = yawOf(rig.tq);
+  const fwd = new V3(-Math.sin(yaw), 0, -Math.cos(yaw)), right = new V3(Math.cos(yaw), 0, -Math.sin(yaw));
+  const [mx, my, mz] = pose.mv || [0, 0, 0], spd = pose.spd || 1;
+  rig.joy.addScaledVector(right, mx * spd * dt).addScaledVector(fwd, my * spd * dt);
+  rig.joy.y += mz * spd * dt;
+  rig.tp.copy(rig.base).add(rig.joy);
+  if (rigO) rig.tp.add(rigO);
+  if (pose.xr && rig.xrRef) rig.tp.add(new V3(...pose.xr).sub(rig.xrRef).applyQuaternion(rig.qOff).multiplyScalar(pose.xs || 1));
+  const sm = Math.min(Math.max(pose.sm ?? 0.5, 0), 0.97);
+  const a = 1 - Math.pow(sm, dt * 60);
+  camera.quaternion.slerp(rig.tq, a);
+  camera.position.lerp(rig.tp, a);
+  if (pose.mm) mm += (pose.mm - mm) * a;
+}
+
+// ---------- phone link (WebRTC via PeerJS) ----------
+const peerOpts = { debug: 1, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } };
+if (params.get('ph')) Object.assign(peerOpts, { host: params.get('ph'), port: +(params.get('pp') || 9000), path: params.get('pt') || '/', secure: params.get('ps') === '1' });
+const conns = new Set();
+let peer = null, phoneSeen = false;
+const randomId = () => 'camlink-' + Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
+function getId() { let v = store.get('peer', null); if (!v) { v = randomId(); store.set('peer', v); } return v; }
+function startPeer(id) {
+  if (!window.Peer) { $('qr').textContent = 'Phone link library failed to load.'; return; }
+  peer = new Peer(id, peerOpts);
+  peer.on('open', showQR);
+  peer.on('connection', (c) => {
+    c.on('open', () => { conns.add(c); updatePeers(); });
+    c.on('data', onPhoneData);
+    c.on('close', () => { conns.delete(c); updatePeers(); });
+    c.on('error', () => { conns.delete(c); updatePeers(); });
+  });
+  peer.on('disconnected', () => setTimeout(() => { try { peer.reconnect(); } catch (e) {} }, 1500));
+  peer.on('error', (e) => {
+    if (e.type === 'unavailable-id') { const nid = randomId(); store.set('peer', nid); peer.destroy(); startPeer(nid); }
+    else if (['network', 'server-error', 'socket-error'].includes(e.type)) $('qr').textContent = 'Can\'t reach the phone-link server. Check your internet, then reload.';
+  });
+}
+function showQR(pid) {
+  const u = new URL('phone.html', location.href);
+  for (const k of ['ph', 'pp', 'pt', 'ps']) if (params.get(k)) u.searchParams.set(k, params.get(k));
+  u.hash = pid;
+  $('phoneUrl').textContent = u.href;
+  if (window.qrcode) { const q = qrcode(0, 'M'); q.addData(u.href); q.make(); $('qr').innerHTML = `<img alt="QR code for the phone link" src="${q.createDataURL(6, 2)}">`; }
+  else $('qr').textContent = 'Open the link below on your phone.';
+}
+function updatePeers() {
+  const on = conns.size > 0;
+  $('phoneDot').classList.toggle('ok', on);
+  $('phoneLabel').textContent = on ? 'Phone linked' : 'Connect phone';
+  if (on) { $('pairPop').hidden = true; toast('Phone linked'); store.set('paired', true); }
+  if (!on) { phoneSeen = false; rig.hold = false; }
+  setModeLabel();
+}
+function onPhoneData(m) {
+  if (!m || typeof m !== 'object') return;
+  if (m.t === 'pose') { pose = m; if (!phoneSeen) { phoneSeen = true; calibrate(); } }
+  else if (m.t === 'hold') { if (m.on) { rig.hold = true; } else { rig.hold = false; if (pose) calibrate(true); } setModeLabel(); }
+  else if (m.t === 'reset' || m.t === 'recenter') { if (m.t === 'reset') goHome(); else if (pose) calibrate(true); }
+  else if (m.t === 'rec') { m.on ? startRec() : stopRec(); }
+  else if (m.t === 'play') { togglePlay(); }
+}
+const sendAll = (o) => { for (const c of conns) { try { c.send(o); } catch (e) {} } };
+setInterval(() => sendAll({ t: 'state', rec: !!rec, el: rec ? curT : 0, mm: Math.round(mm), busy, scene: SCENE_NAME, playing: playing && !rec, dur: DURATION }), 250);
+
+// ---------- time / transport ----------
+let curT = 0, playing = false, playT0 = 0, rec = null, busy = false, takeN = 0;
+function setTime(t) {
+  curT = THREE.MathUtils.clamp(t, 0, DURATION);
+  const p = (curT / DURATION) * 100;
+  $('head').style.left = p + '%'; $('trackFill').style.width = p + '%';
+  $('tNow').textContent = curT.toFixed(1);
+}
+function togglePlay(force) {
+  if (rec || busy) return;
+  playing = force ?? !playing;
+  if (playing) { if (curT >= DURATION - 0.05) setTime(0); playT0 = performance.now() - curT * 1000; captureRigStart(); }
+  else endRig();
+  $('playIcon').innerHTML = playing ? '<path d="M2 1h3v10H2zM7 1h3v10H7z"/>' : '<path d="M2 1l9 5-9 5z"/>';
+}
+$('playBtn').onclick = () => togglePlay();
+function scrubFrom(e) {
+  const r = $('track').getBoundingClientRect();
+  if (playing) togglePlay(false);
+  setTime(((e.clientX - r.left) / r.width) * DURATION);
+}
+$('track').addEventListener('pointerdown', (e) => { if (rec || busy) return; $('track').setPointerCapture(e.pointerId); scrubFrom(e); $('track').onpointermove = scrubFrom; });
+$('track').addEventListener('pointerup', () => { $('track').onpointermove = null; });
+$('track').addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); setTime(curT + (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 1 : 0.1)); }
+});
+
+// ---------- recording ----------
+const takes = [];
+function pickMime() {
+  for (const m of ['video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1', 'video/webm;codecs=vp9', 'video/webm', 'video/mp4'])
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+  return '';
+}
+function startRec() {
+  if (rec || busy) return;
+  if (playing) togglePlay(false);
+  setTime(0); update(0);
+  captureRigStart();
+  const fps = +$('fps').value, mime = pickMime();
+  let recorder = null; const chunks = [];
+  try {
+    recorder = new MediaRecorder(canvas.captureStream(fps), { mimeType: mime, videoBitsPerSecond: RES[1] >= 1080 ? 24e6 : 12e6 });
+    recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    recorder.start(250);
+  } catch (e) { recorder = null; }
+  takeN++;
+  rec = { name: `${SCENE_NAME}_take_${String(takeN).padStart(3, '0')}`, t0: performance.now(), path: [], recorder, chunks, mime, fps, res: [...RES], code: sceneCode };
+  $('recBtn').classList.add('on'); $('recBtn').setAttribute('aria-label', 'Stop recording');
+  $('tally').classList.add('on'); $('track').classList.add('rec');
+  ['aspect', 'quality', 'fps'].forEach((id) => $(id).disabled = true);
+}
+function stopRec() {
+  if (!rec) return;
+  const r = rec; rec = null;
+  $('recBtn').classList.remove('on'); $('recBtn').setAttribute('aria-label', 'Record');
+  $('tally').classList.remove('on'); $('tallyTxt').textContent = 'STBY'; $('track').classList.remove('rec');
+  ['aspect', 'quality', 'fps'].forEach((id) => $(id).disabled = false);
+  rigStart = null;
+  if ($('autoReturn').checked && r.path.length) {
+    const p0 = r.path[0];
+    camera.position.set(...p0.p); camera.quaternion.set(...p0.q); mm = p0.mm;
+    if (rig.on) calibrate(true); else { const f = new V3(0, 0, -1).applyQuaternion(camera.quaternion); controls.target.copy(camera.position).addScaledVector(f, Math.max(1, home.pos.distanceTo(home.target))); }
+  }
+  setTime(0);
+  const finish = async () => {
+    const take = { name: r.name, res: r.res, fps: r.fps, path: r.path, code: r.code, scene: SCENE_NAME,
+      duration: r.path.length ? r.path[r.path.length - 1].t : 0, realtime: null, clean: null, thumb: null };
+    if (r.chunks.length) take.realtime = new Blob(r.chunks, { type: r.mime || 'video/webm' });
+    take.thumb = await renderPathFrame(take, 0, 'image/jpeg', 240);
+    takes.unshift(take); renderTakes();
+    if ($('autoClean').checked && take.path.length > 1) { await renderClean(take); if (take.clean) { save(take.clean, take.name + '_clean.mp4'); toast('Saved ' + take.name + '_clean.mp4'); } }
+  };
+  if (r.recorder && r.recorder.state !== 'inactive') { r.recorder.onstop = finish; r.recorder.stop(); } else finish();
+}
+$('recBtn').onclick = () => rec ? stopRec() : startRec();
+
+function save(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+function pathJSON(t) {
+  return new Blob([JSON.stringify({ scene: t.scene, name: t.name, duration: t.duration, res: t.res, fps: t.fps, filmGauge: 36, sensorFit: 'AUTO',
+    coords: 'three.js: metres, +Y up, camera looks down -Z. Blender: (x, -z, y), q_b = Rx(90deg) * q_t', path: t.path })], { type: 'application/json' });
+}
+function renderTakes() {
+  $('takeCount').textContent = takes.length;
+  if (!takes.length) { $('takes').innerHTML = '<div class="empty">No takes yet. Each take saves a clean MP4 to your Downloads.</div>'; return; }
+  $('takes').innerHTML = '';
+  for (const t of takes) {
+    const d = document.createElement('div'); d.className = 'take';
+    d.innerHTML = `${t.thumb ? `<img alt="">` : '<div class="ph"></div>'}<div><div class="name"></div><div class="meta"></div></div><div class="acts"></div>`;
+    if (t.thumb) d.querySelector('img').src = t.thumb;
+    d.querySelector('.name').textContent = t.name;
+    d.querySelector('.meta').textContent = `${t.duration.toFixed(1)} s · ${t.res[0]}×${t.res[1]}${t.clean ? ' · clean ready' : ''}`;
+    const acts = d.querySelector('.acts');
+    const btn = (label, fn, opts = {}) => { const b = document.createElement('button'); b.textContent = label; b.onclick = fn; b.disabled = !!opts.disabled; if (opts.primary) b.className = 'primary'; acts.appendChild(b); };
+    btn(t.clean ? 'Clean MP4' : 'Render clean MP4', async () => { if (!t.clean) await renderClean(t); if (t.clean) save(t.clean, t.name + '_clean.mp4'); renderTakes(); }, { primary: true });
+    btn('First frame', async () => { const blob = await renderPathFrame(t, 0, 'image/png'); save(blob, t.name + '_first_frame.png'); });
+    btn('Realtime', () => save(t.realtime, t.name + (t.realtime.type.includes('mp4') ? '.mp4' : '.webm')), { disabled: !t.realtime });
+    btn('Camera path', () => save(pathJSON(t), t.name + '.json'));
+    $('takes').appendChild(d);
+  }
+}
+
+function samplePath(path, t) {
+  let lo = 0, hi = path.length - 1;
+  if (t <= path[0].t) return path[0];
+  if (t >= path[hi].t) return path[hi];
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; path[mid].t <= t ? lo = mid : hi = mid; }
+  const a = path[lo], b = path[hi], k = (t - a.t) / (b.t - a.t || 1);
+  const q = new Q(...a.q).slerp(new Q(...b.q), k);
+  return { p: a.p.map((v, i) => v + (b.p[i] - v) * k), q: [q.x, q.y, q.z, q.w], mm: a.mm + (b.mm - a.mm) * k };
+}
+
+// Render one frame of a take (camera from its path, action at time t) without disturbing the live view.
+async function renderPathFrame(take, t, type = 'image/png', maxW = 0) {
+  const keep = { res: [...RES], mm, pos: camera.position.clone(), q: camera.quaternion.clone(), code: sceneCode };
+  if (take.code && take.code !== sceneCode) await loadSceneModule(take.code, { keepCamera: true });
+  const [w, h] = take.res; renderer.setSize(w, h, false); camera.aspect = w / h;
+  const s = samplePath(take.path, t);
+  camera.position.set(...s.p); camera.quaternion.set(...s.q); camera.setFocalLength(s.mm);
+  update(t); renderer.render(scene, camera);
+  let out;
+  if (maxW) { const c = document.createElement('canvas'); c.width = maxW; c.height = Math.round(maxW * h / w); c.getContext('2d').drawImage(canvas, 0, 0, c.width, c.height); out = c.toDataURL(type, 0.85); }
+  else out = await new Promise((r) => canvas.toBlob(r, type));
+  RES = keep.res; renderer.setSize(RES[0], RES[1], false); camera.aspect = RES[0] / RES[1];
+  mm = keep.mm; camera.position.copy(keep.pos); camera.quaternion.copy(keep.q); update(curT);
+  return out;
+}
+
+async function pickCodec(w, h) {
+  if (!window.VideoEncoder) return null;
+  for (const [codec, mux] of [['avc1.640033', 'avc'], ['avc1.640028', 'avc'], ['avc1.4d0028', 'avc'], ['avc1.42001f', 'avc'], ['vp09.00.40.08', 'vp9'], ['vp09.00.10.08', 'vp9']]) {
+    try { const s = await VideoEncoder.isConfigSupported({ codec, width: w, height: h, bitrate: 20e6, framerate: 24 }); if (s.supported) return { codec, mux }; } catch (e) {}
+  }
+  return null;
+}
+async function renderClean(take) {
+  if (busy || rec) return;
+  const [w, h] = take.res, fps = 24, pick = await pickCodec(w, h);
+  if (!pick || !window.Mp4Muxer) { showError('This browser can\'t encode MP4 (needs WebCodecs: Chrome, Edge, Safari 16.4+ or the Claude app). Use the Realtime file instead.'); return; }
+  if (take.code && take.code !== sceneCode) await loadSceneModule(take.code, { keepCamera: true });
+  busy = true; $('busy').classList.add('on'); $('busyBar').style.width = '0';
+  const keep = { res: [...RES], mm, pos: camera.position.clone(), q: camera.quaternion.clone() };
+  renderer.setSize(w, h, false); camera.aspect = w / h;
+  const muxer = new Mp4Muxer.Muxer({ target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: pick.mux, width: w, height: h, frameRate: fps }, fastStart: 'in-memory' });
+  let encErr = null;
+  const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { encErr = e; } });
+  enc.configure({ codec: pick.codec, width: w, height: h, bitrate: h >= 1080 ? 24e6 : 14e6, framerate: fps });
+  const N = Math.max(1, Math.floor(take.duration * fps));
+  for (let i = 0; i <= N && !encErr; i++) {
+    const s = samplePath(take.path, i / fps);
+    camera.position.set(...s.p); camera.quaternion.set(...s.q); camera.setFocalLength(s.mm);
+    update(i / fps); renderer.render(scene, camera);
+    const frame = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
+    enc.encode(frame, { keyFrame: i % 48 === 0 }); frame.close();
+    if (enc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 0));
+    if (i % 6 === 0) { $('busyTxt').textContent = `Rendering clean ${fps} fps · ${i} / ${N}`; $('busyBar').style.width = (i / N * 100) + '%'; await new Promise((r) => setTimeout(r, 0)); }
+  }
+  try { await enc.flush(); muxer.finalize(); take.clean = new Blob([muxer.target.buffer], { type: 'video/mp4' }); } catch (e) { encErr = encErr || e; }
+  enc.close?.();
+  RES = keep.res; renderer.setSize(RES[0], RES[1], false); camera.aspect = RES[0] / RES[1];
+  mm = keep.mm; camera.position.copy(keep.pos); camera.quaternion.copy(keep.q);
+  busy = false; $('busy').classList.remove('on'); $('busyTxt').textContent = 'Rendering…';
+  if (encErr) showError('Encoding failed: ' + (encErr.message || encErr));
+  renderTakes();
+}
+
+// ---------- stills ----------
+async function saveStill() {
+  update(curT); renderer.render(scene, camera);
+  const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+  const name = `${SCENE_NAME}_${curT.toFixed(1).replace('.', '-')}s.png`;
+  save(blob, name); toast('Saved ' + name);
+}
+$('stillBtn').onclick = saveStill;
+
+// ---------- popovers, menus, drawer ----------
+const pops = ['pairPop', 'moreMenu'];
+function togglePop(id, force) {
+  const show = force ?? $(id).hidden;
+  pops.forEach((p) => { if (p !== id) $(p).hidden = true; });
+  $(id).hidden = !show;
+}
+$('phoneChip').onclick = (e) => { e.stopPropagation(); togglePop('pairPop'); };
+$('moreBtn').onclick = (e) => { e.stopPropagation(); togglePop('moreMenu'); };
+pops.forEach((p) => $(p).addEventListener('click', (e) => e.stopPropagation()));
+addEventListener('click', () => pops.forEach((p) => $(p).hidden = true));
+$('takesChip').onclick = () => $('drawer').classList.toggle('open');
+$('closeDrawer').onclick = () => $('drawer').classList.remove('open');
+$('helpBtn').onclick = () => { togglePop('moreMenu', false); $('help').hidden = false; };
+$('help').onclick = () => $('help').hidden = true;
+for (const id of ['autoClean', 'autoStop', 'autoReturn']) { $(id).checked = store.get(id, true); $(id).onchange = () => store.set(id, $(id).checked); }
+
+$('copyLink').onclick = async () => {
+  togglePop('moreMenu', false);
+  try { await navigator.clipboard.writeText(location.href); toast('Scene link copied'); } catch (e) { prompt('Copy this link', location.href); }
+};
+$('glbBtn').onclick = async () => {
+  togglePop('moreMenu', false); update(curT);
+  const glb = await new GLTFExporter().parseAsync(scene, { binary: true });
+  save(new Blob([glb], { type: 'model/gltf-binary' }), SCENE_NAME + '.glb'); toast('Saved ' + SCENE_NAME + '.glb');
+};
+async function takeFiles(list) {
+  let sceneFile = null, models = 0;
+  for (const f of list) {
+    if (/\.(glb|gltf)$/i.test(f.name)) { kit.files[f.name] = URL.createObjectURL(f); models++; }
+    else if (/\.(m?js)$/i.test(f.name)) sceneFile = f;
+  }
+  if (sceneFile) await setSceneFromCode(await sceneFile.text(), { label: sceneFile.name.replace(/\.m?js$/, '') });
+  else if (models && sceneCode) { await loadSceneModule(sceneCode, { keepCamera: true }); toast(models + ' model' + (models > 1 ? 's' : '') + ' added'); }
+}
+$('openFile').onclick = () => { togglePop('moreMenu', false); $('fileIn').click(); };
+$('fileIn').onchange = (e) => takeFiles([...e.target.files]);
+addEventListener('dragover', (e) => { e.preventDefault(); $('drop').classList.add('on'); });
+addEventListener('dragleave', (e) => { if (!e.relatedTarget) $('drop').classList.remove('on'); });
+addEventListener('drop', (e) => { e.preventDefault(); $('drop').classList.remove('on'); takeFiles([...e.dataTransfer.files]); });
+$('modeBtn').onclick = () => rig.on ? releaseToMouse() : calibrate();
+
+addEventListener('keydown', (e) => {
+  if (['SELECT', 'INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.metaKey || e.ctrlKey) return;
+  const k = e.key;
+  if (k === 'r' || k === 'R') rec ? stopRec() : startRec();
+  else if (k === ' ') { e.preventDefault(); togglePlay(); }
+  else if (k === 'ArrowRight' || k === 'ArrowLeft') { if (!rec) { if (playing) togglePlay(false); setTime(curT + (k === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 1 : 0.1)); } }
+  else if (k === 'Home') { if (!rec) { if (playing) togglePlay(false); setTime(0); } }
+  else if (k === 'm' || k === 'M') rig.on ? releaseToMouse() : calibrate();
+  else if (k === 'h' || k === 'H') goHome();
+  else if (k === 'g' || k === 'G') setGuide('thirds');
+  else if (k === 's' || k === 'S') saveStill();
+  else if (k === '[') mm = Math.max(10, mm - 5);
+  else if (k === ']') mm = Math.min(200, mm + 5);
+  else if (k === '?') $('help').hidden = !$('help').hidden;
+  else if (k === 'Escape') { $('help').hidden = true; $('drawer').classList.remove('open'); pops.forEach((p) => $(p).hidden = true); }
+});
+
+// ---------- loop ----------
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (busy) return;
+  const dt = Math.min(0.25, (now - last) / 1000); last = now;
+  if (rec) setTime((now - rec.t0) / 1000);
+  else if (playing) { const t = (now - playT0) / 1000; if (t >= DURATION) { setTime(DURATION); togglePlay(false); } else setTime(t); }
+  const moving = rec || playing;
+  const ro = moving ? rigOffset(curT) : null;
+  if (rig.on) stepRig(dt, ro ? ro.o : null);
+  else if (!(moving && applyRigMouse(curT))) controls.update();
+  camera.setFocalLength(mm);
+  update(curT);
+  renderer.render(scene, camera);
+  if (rec) {
+    rec.path.push({ t: +curT.toFixed(4), p: camera.position.toArray().map((v) => +v.toFixed(5)), q: camera.quaternion.toArray().map((v) => +v.toFixed(6)), mm: +mm.toFixed(2) });
+    const s = curT % 60; $('tallyTxt').textContent = `REC ${String(Math.floor(curT / 60)).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}`;
+    if ($('autoStop').checked && (now - rec.t0) / 1000 >= DURATION + 0.4) stopRec();
+  }
+  $('hudLens').textContent = Math.round(mm) + 'mm';
+}
+
+// ---------- boot ----------
+const fmt = store.get('fmt', null);
+if (fmt) { $('aspect').value = fmt.aspect; $('quality').value = fmt.quality; $('fps').value = fmt.fps; }
+const rs = store.get('rig', null); if (rs) { $('rig').value = rs[0]; $('rigAmt').value = rs[1]; $('rig').dispatchEvent(new Event('change')); }
+setFormat(); setModeLabel();
+{
+  const h = location.hash.match(/scene=([A-Za-z0-9_-]+)/);
+  try {
+    if (h) await loadSceneModule(await decodeScene(h[1]));
+    else {
+      const name = (params.get('scene') || 'cafe-argument').replace(/[^A-Za-z0-9_-]/g, '');
+      const res = await fetch('../scenes/' + name + '.js');
+      if (!res.ok) throw new Error('scenes/' + name + '.js not found');
+      await loadSceneModule(await res.text(), { label: name });
+    }
+  } catch (e) { camlinkFail('Could not load the scene: ' + (e.message || e)); throw e; }
+}
+startPeer(getId());
+if (!conns.size) setTimeout(() => { if (!conns.size && !store.get('paired', false)) togglePop('pairPop', true); }, 600);
+requestAnimationFrame(frame);
+window.camlink = {
+  // For Claude: await camlink.loadScene(code) swaps the scene in place (phone stays connected) and returns the shareable link.
+  loadScene: (code) => setSceneFromCode(code),
+  get sceneName() { return SCENE_NAME; },
+  get link() { return location.href; },
+  get phoneConnected() { return conns.size > 0; },
+  get takes() { return takes.map((t) => ({ name: t.name, duration: t.duration, clean: !!t.clean })); },
+  seek: (t) => { if (playing) togglePlay(false); if (t !== null) setTime(+t); },
+  framing: (pos, target, lens) => { if (rig.on) releaseToMouse(); camera.position.set(...pos); controls.target.set(...target); if (lens) mm = lens; controls.update(); saveHome(); },
+  camera, renderer, rig, calibrate, startRec, stopRec, renderClean: (i = 0) => renderClean(takes[i]),
+  get scene() { return scene; }, get markers() { return markers; },
+};
+</script>
+</body>
+</html>
