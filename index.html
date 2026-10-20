@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>camlink</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap">
@@ -35,7 +36,9 @@
 
   /* top bar */
   header { display: flex; align-items: center; gap: 12px; padding: 10px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); }
-  .brand { font: 500 13px var(--mono); letter-spacing: .02em; }
+  .brand { font: 500 13px var(--mono); letter-spacing: .02em; display: flex; align-items: center; gap: 0; white-space: nowrap; }
+  .brand .logo { width: 20px; height: 20px; margin-right: 9px; color: var(--text); flex: none; }
+  .brand .scene-sep { margin: 0 .55em; }
   .brand span { color: var(--mute); }
   #sceneName { color: var(--text); }
   header .spacer { flex: 1; }
@@ -85,6 +88,19 @@
   #track .mk { position: absolute; top: 10px; width: 1px; height: 12px; background: #ffffff55; }
   #track .head { position: absolute; top: 6px; width: 2px; height: 20px; margin-left: -1px; background: var(--amber); border-radius: 1px; }
   #track.rec .head { background: var(--tally); }
+  /* shot strip: the scene's Auto shots under the rail */
+  #track.has-shots { height: 44px; }
+  #shotStrip { position: absolute; left: 0; right: 0; top: 26px; height: 16px; display: none; }
+  #track.has-shots #shotStrip { display: block; }
+  #shotStrip button { position: absolute; top: 0; height: 16px; padding: 0 5px; border: 0; border-left: 1px solid var(--ink); background: var(--raise); color: var(--mute); font: 500 9.5px/16px var(--mono); letter-spacing: .02em; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #shotStrip button:first-child { border-radius: 3px 0 0 3px; } #shotStrip button:last-child { border-radius: 0 3px 3px 0; }
+  #shotStrip button:hover { color: var(--text); }
+  #shotStrip button.cur { color: var(--ink); background: var(--amber); }
+  #track.manual #shotStrip button.cur { color: var(--text); background: #2c2f34; }
+  #camSeg { flex: none; border: 1px solid var(--line); border-radius: 8px; padding: 2px; }
+  #camSeg button { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--mute); font-size: 12px; }
+  #camSeg button:hover { color: var(--text); }
+  #camSeg button.on { background: var(--raise); color: var(--amber); }
   .time { font: 500 12px var(--mono); color: var(--mute); min-width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
   .time b { color: var(--text); font-weight: 500; }
   .tools { flex-wrap: wrap; gap: 6px; }
@@ -127,6 +143,10 @@
   .take .acts button { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line); background: transparent; font-size: 12px; }
   .take .acts button.primary { border-color: #f2c14e55; color: var(--amber); }
   .empty { color: var(--mute); padding: 8px 0; }
+  #autoBox { padding: 0 0 14px; } #autoBox p { margin: 0 0 10px; color: var(--mute); }
+  #autoBox .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  #autoBox button { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line); background: transparent; font-size: 12px; }
+  #autoBox button.primary { border-color: #f2c14e55; color: var(--amber); }
   #toast { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translate(-50%, 20px); opacity: 0; background: var(--text); color: var(--ink); padding: 8px 14px; border-radius: 999px; font-weight: 500; transition: all .2s; pointer-events: none; z-index: 30; }
   #toast.on { opacity: 1; transform: translate(-50%, 0); }
   #help { position: absolute; z-index: 25; inset: 0; background: #000a; display: grid; place-items: center; }
@@ -139,6 +159,7 @@
     .brand .scene-sep, #sceneName { display: none; }
     .tools .lbl { display: none; }
     .time { min-width: 0; }
+    #camSeg button { padding: 0 7px; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
@@ -173,7 +194,7 @@
 <body>
 <div id="app">
   <header>
-    <div class="brand">camlink <span class="scene-sep">/</span> <span id="sceneName">loading…</span></div>
+    <div class="brand"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke-linecap="round"><circle cx="5" cy="16" r="2.6" fill="var(--amber)"/><path d="M9.5 14 27 5M9.5 18 27 27" stroke="currentColor" stroke-width="2"/><path d="M27 9.5v13" stroke="var(--amber)" stroke-width="2"/></svg>camlink <span class="scene-sep">/</span> <span id="sceneName">loading…</span></div>
     <div class="spacer"></div>
     <button class="chip" id="phoneChip" aria-haspopup="dialog"><span class="dot" id="phoneDot"></span><span id="phoneLabel">Connect phone</span></button>
     <button class="chip" id="takesChip">Takes <span class="badge" id="takeCount">0</span></button>
@@ -190,6 +211,7 @@
       <div class="hud tl"><span class="tally" id="tally"><i></i><span id="tallyTxt">STBY</span></span></div>
       <div class="hud tr"><span id="hudLens">35mm</span><span id="hudFmt">16:9</span></div>
       <div class="hud bl"><span id="hudMode">MOUSE</span><span id="hudRig"></span></div>
+      <div class="hud br"><span id="hudShot"></span></div>
       <div id="busy"><div><div id="busyTxt">Rendering…</div><div class="bar"><i id="busyBar"></i></div></div></div>
     </div>
     <div id="drop">Drop a scene (.js) or a model (.glb)</div>
@@ -221,6 +243,10 @@
 
     <aside id="drawer" aria-label="Takes">
       <h3>Takes <button class="iconbtn" id="closeDrawer" aria-label="Close">✕</button></h3>
+      <div id="autoBox" hidden>
+        <p>This scene has a shot list. Render it straight to a clean MP4, no realtime pass needed.</p>
+        <div class="acts"><button class="primary" id="autoRender">Render Auto take</button><button id="autoList">Shot list</button></div>
+      </div>
       <div id="takes"><div class="empty">No takes yet. Each take saves a clean MP4 to your Downloads.</div></div>
     </aside>
 
@@ -233,6 +259,7 @@
           <dt>← →</dt><dd>Step 0.1 s (Shift: 1 s)</dd>
           <dt>Home</dt><dd>Back to 0 s</dd>
           <dt>M</dt><dd>Switch mouse / phone</dd>
+          <dt>A</dt><dd>Camera: Manual / Auto / Hybrid (scenes with shots)</dd>
           <dt>H</dt><dd>Reset shot to the first frame</dd>
           <dt>G</dt><dd>Thirds grid</dd>
           <dt>[ ]</dt><dd>Zoom out / in</dd>
@@ -247,9 +274,14 @@
       <button class="rec" id="recBtn" aria-label="Record"><i></i></button>
       <button class="play" id="playBtn" aria-label="Play action"><svg viewBox="0 0 12 12" id="playIcon"><path d="M2 1l9 5-9 5z"/></svg></button>
       <div id="track" role="slider" aria-label="Action time" tabindex="0">
-        <div class="rail"></div><div class="fill" id="trackFill"></div><div id="marks"></div><div class="head" id="head"></div>
+        <div class="rail"></div><div class="fill" id="trackFill"></div><div id="marks"></div><div id="shotStrip"></div><div class="head" id="head"></div>
       </div>
       <div class="time"><b id="tNow">0.0</b> / <span id="tDur">8.0</span> s</div>
+      <div class="seg" id="camSeg" role="group" aria-label="Camera" hidden>
+        <button data-m="manual" title="You frame and move the camera (mouse or phone)">Manual</button>
+        <button data-m="auto" title="The scene's shot list drives the camera: moves, cuts and lenses">Auto</button>
+        <button data-m="hybrid" title="Auto shots, with your phone adding the handheld aim on top">Hybrid</button>
+      </div>
     </div>
     <div class="tools">
       <span class="lbl">Camera move</span>
@@ -353,6 +385,11 @@ async function loadSceneModule(code, { keepCamera = false, label = '' } = {}) {
   document.title = SCENE_NAME + ' · camlink';
   $('tDur').textContent = DURATION.toFixed(1);
   $('marks').innerHTML = markers.map((t) => `<div class="mk" style="left:${(t / DURATION) * 100}%" title="${t.toFixed(1)} s"></div>`).join('');
+  curT = 0;
+  try { SHOTS = built.shots?.length ? prepareShots(built.shots) : []; }
+  catch (e) { SHOTS = []; update(0); setTimeout(() => showError('Shot list error: ' + (e && e.message || e)), 0); }
+  renderShotStrip();
+  if (!keepCamera) setCamMode(SHOTS.length ? 'auto' : 'manual'); else if (!SHOTS.length) setCamMode('manual'); else setCamMode(camMode);
   if (!keepCamera) {
     const c0 = built.camera || { pos: [0, 1.6, 5], target: [0, 1, 0], mm: 35 };
     camera.position.set(...c0.pos); controls.target.set(...(c0.target || [0, 1, 0])); mm = lensTarget = c0.mm || 35;
@@ -487,9 +524,10 @@ function releaseToMouse() {
   controls.enabled = true; setModeLabel();
 }
 function setModeLabel() {
-  $('hudMode').textContent = rig.on ? (rig.hold ? 'PHONE · HOLD' : 'PHONE') : 'MOUSE';
+  const ph = rig.on ? (rig.hold ? 'PHONE · HOLD' : 'PHONE') : 'MOUSE';
+  $('hudMode').textContent = camMode === 'auto' ? 'AUTO' : camMode === 'hybrid' ? (pose && conns.size ? (rig.hold ? 'HYBRID · HOLD' : 'HYBRID · PHONE') : 'HYBRID · NO PHONE') : ph;
   $('modeBtn').textContent = rig.on ? 'Use mouse' : 'Use phone';
-  $('modeBtn').disabled = !rig.on && !pose;
+  $('modeBtn').disabled = (!rig.on && !pose) || camMode !== 'manual';
   $('modeBtn').style.opacity = $('modeBtn').disabled ? .4 : 1;
 }
 function stepRig(dt, rigO) {
@@ -509,6 +547,132 @@ function stepRig(dt, rigO) {
   camera.quaternion.slerp(rig.tq, a);
   camera.position.lerp(rig.tp, a);
   if (pose.mm && !pose.lensMsg) setLens(pose.mm);   // older phone pages send the lens inside each pose
+}
+
+// ---------- auto camera: the scene's shot list ----------
+// A scene can return shots: [{ name, t, cam, to?, move?, amount?, ease?, shake?, roll?, live?, transition?, desc? }].
+// Auto plays them (moves, cuts, lenses). Hybrid plays them with the phone's aim layered on top. Manual ignores them.
+let SHOTS = [], camMode = 'manual', lastShotI = -1;
+const hyb = { q0: null, d: new Q() };
+const EASE = { smooth, linear: (x) => x, in: (x) => x * x, out: (x) => 1 - (1 - x) * (1 - x), hold: () => 0 };
+const toFr = (c) => ({ pos: new V3(...(c.pos?.isVector3 ? c.pos.toArray() : c.pos)), target: new V3(...(c.target?.isVector3 ? c.target.toArray() : (c.target || [0, 1, 0]))), mm: c.mm || 35 });
+const callCam = (c, t) => toFr(typeof c === 'function' ? c(t) : c);
+function prepareShots(list) {
+  list = (list || []).filter((s) => s && s.cam && (s.t || 0) < DURATION).sort((a, b) => (a.t || 0) - (b.t || 0));
+  const out = list.map((s, i) => {
+    const start = i === 0 ? 0 : s.t, end = i + 1 < list.length ? list[i + 1].t : DURATION;
+    const sh = { ...s, i, start, end, easeFn: EASE[s.ease] || smooth, transition: s.transition || 'cut', name: s.name || 'Shot ' + (i + 1) };
+    if (!s.live) {
+      update(start); sh.a = callCam(s.cam, start);
+      if (s.to) { update(end); sh.b = callCam(s.to, end); }
+      else sh.b = s.move ? toFr(kit.move(sh.a, s.move, s.amount ?? 1)) : sh.a;
+    }
+    return sh;
+  });
+  update(curT);
+  return out;
+}
+const _m4 = new THREE.Matrix4(), ZAX = new V3(0, 0, 1);
+function lookQ(pos, target, rollDeg) {
+  const q = new Q().setFromRotationMatrix(_m4.lookAt(pos, target, UP));
+  if (rollDeg) q.multiply(new Q().setFromAxisAngle(ZAX, rollDeg * Math.PI / 180));
+  return q;
+}
+// Framing of one shot at time t. Live shots read the scene, so update(t) must have run first.
+function shotFrame(sh, t) {
+  const u = THREE.MathUtils.clamp((t - sh.start) / Math.max(1e-3, sh.end - sh.start), 0, 1), e = sh.easeFn(u);
+  let a, b;
+  if (sh.live) {
+    a = callCam(sh.cam, t);
+    b = sh.to ? callCam(sh.to, t) : sh.move ? toFr(kit.move(a, sh.move, (sh.amount ?? 1) * e)) : a;
+    if (!sh.to) return { pos: b.pos, q: lookQ(b.pos, b.target, sh.roll), mm: b.mm };
+  } else { a = sh.a; b = sh.b; }
+  const pos = a.pos.clone().lerp(b.pos, e), target = a.target.clone().lerp(b.target, e);
+  return { pos, q: lookQ(pos, target, sh.roll), mm: a.mm * Math.pow(b.mm / a.mm, e) };
+}
+function shotIndex(t) { let i = 0; while (i + 1 < SHOTS.length && t >= SHOTS[i + 1].start) i++; return i; }
+const WHIP = 0.18;
+function camAt(t, withShake = true) {
+  const i = shotIndex(t), sh = SHOTS[i], nx = SHOTS[i + 1], pv = SHOTS[i - 1];
+  let f = shotFrame(sh, t), w = null;
+  if (nx && nx.transition === 'whip' && t > nx.start - WHIP) w = [sh, nx, nx.start];
+  else if (pv && sh.transition === 'whip' && t < sh.start + WHIP) w = [pv, sh, sh.start];
+  if (w) {   // whip pan: a fast swing from the outgoing framing to the incoming one, across the cut point
+    const [A, B, T] = w, k = smooth(THREE.MathUtils.clamp((t - (T - WHIP)) / (2 * WHIP), 0, 1));
+    const fa = shotFrame(A, Math.min(t, T - 1e-4)), fb = shotFrame(B, Math.max(t, T));
+    f = { pos: fa.pos.lerp(fb.pos, k), q: fa.q.slerp(fb.q, k), mm: fa.mm + (fb.mm - fa.mm) * k };
+  }
+  if (withShake && sh.shake) {
+    const s = kit.shake(t, sh.shake, i + 1);
+    f.q.multiply(new Q().setFromEuler(new THREE.Euler(s[1], s[0], s[2], 'YXZ')));
+    f.pos.add(new V3(s[3], s[4], s[5]).applyQuaternion(f.q));
+  }
+  return f;
+}
+function applyShotCam(dt) {
+  const phone = camMode === 'hybrid' && pose && conns.size > 0;
+  const f = camAt(curT, !phone);
+  camera.position.copy(f.pos); camera.quaternion.copy(f.q);
+  mm = lensTarget = f.mm;
+  if (phone) {   // the phone's rotation since calibration, applied in the camera's own frame
+    const pq = new Q(...pose.q);
+    if (!hyb.q0) hyb.q0 = pq.clone().multiply(hyb.d.clone().invert());
+    if (!rig.hold) {
+      const tgt = hyb.q0.clone().invert().multiply(pq);
+      const sm = Math.min(Math.max(pose.sm ?? 0.5, 0), 0.97);
+      hyb.d.slerp(tgt, 1 - Math.pow(sm, dt * 60));
+    }
+    camera.quaternion.multiply(hyb.d);
+  }
+}
+function hybReset() { hyb.q0 = null; hyb.d.identity(); }
+function renderShotStrip() {
+  $('shotStrip').innerHTML = '';
+  SHOTS.forEach((sh, i) => {
+    const b = document.createElement('button');
+    b.style.left = (sh.start / DURATION * 100) + '%'; b.style.width = ((sh.end - sh.start) / DURATION * 100) + '%';
+    b.textContent = String(i + 1).padStart(2, '0') + ' ' + sh.name; b.title = `${sh.name} · ${sh.start.toFixed(1)}–${sh.end.toFixed(1)} s${sh.desc ? ' · ' + sh.desc : ''}`;
+    b.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (rec || busy) return; if (playing) togglePlay(false); setTime(sh.start); });
+    $('shotStrip').appendChild(b);
+  });
+  lastShotI = -1;
+}
+function markShot() {
+  if (!SHOTS.length) { $('hudShot').textContent = ''; return; }
+  const i = shotIndex(curT); if (i === lastShotI) return; lastShotI = i;
+  [...$('shotStrip').children].forEach((b, k) => b.classList.toggle('cur', k === i));
+  $('hudShot').textContent = camMode === 'manual' ? '' : String(i + 1).padStart(2, '0') + ' ' + SHOTS[i].name.toUpperCase();
+}
+function setCamMode(m) {
+  if (!SHOTS.length) m = 'manual';
+  if (!['manual', 'auto', 'hybrid'].includes(m)) m = 'auto';
+  const prev = camMode; camMode = m;
+  document.querySelectorAll('#camSeg button').forEach((b) => { b.classList.toggle('on', b.dataset.m === m); b.setAttribute('aria-pressed', b.dataset.m === m); });
+  $('camSeg').hidden = !SHOTS.length;
+  $('track').classList.toggle('has-shots', !!SHOTS.length); $('track').classList.toggle('manual', m === 'manual');
+  $('rig').disabled = $('rigAmt').disabled = m !== 'manual';
+  hybReset(); lastShotI = -1;
+  if (m === 'manual' && prev !== 'manual') {   // keep the current framing and hand it to the mouse or phone
+    const f = new V3(0, 0, -1).applyQuaternion(camera.quaternion);
+    controls.target.copy(camera.position).addScaledVector(f, 2.5); lensTarget = mm;
+    if (rig.on) calibrate(true); else controls.enabled = true;
+  }
+  if (m !== 'manual') controls.enabled = false;
+  setModeLabel(); fit();
+}
+document.querySelectorAll('#camSeg button').forEach((b) => b.onclick = () => { if (!rec) setCamMode(b.dataset.m); });
+
+// Shot list for the generation prompt: one line per shot with its time range.
+function shotList() {
+  const out = SHOTS.map((sh, i) => {
+    update(sh.start); const f = shotFrame(sh, sh.start);
+    const move = sh.move ? ({ push: 'push in', pull: 'pull out', truckL: 'truck left', truckR: 'truck right', craneUp: 'crane up', craneDown: 'crane down', orbitL: 'orbit left', orbitR: 'orbit right', zoomIn: 'zoom in', zoomOut: 'zoom out', dollyZoom: 'dolly zoom' }[sh.move] || sh.move) : sh.to ? 'move' : sh.live ? 'follow' : 'static';
+    const r = { n: i + 1, name: sh.name, start: +sh.start.toFixed(2), end: +sh.end.toFixed(2), lens: Math.round(f.mm), move, transition: i ? sh.transition : 'open', desc: sh.desc || '' };
+    r.line = `Shot ${i + 1} (${r.start.toFixed(1)}–${r.end.toFixed(1)} s)${i ? (sh.transition === 'whip' ? ', whip pan in' : ', hard cut') : ''}: ${sh.desc || sh.name}. ${r.lens}mm, ${move}${sh.shake ? ', handheld' : ''}.`;
+    return r;
+  });
+  update(curT);
+  return out;
 }
 
 // ---------- phone link (WebRTC via PeerJS) ----------
@@ -552,15 +716,16 @@ function updatePeers() {
 }
 function onPhoneData(m) {
   if (!m || typeof m !== 'object') return;
-  if (m.t === 'pose') { pose = m; if (!phoneSeen) { phoneSeen = true; calibrate(); } }
-  else if (m.t === 'hold') { if (m.on) { rig.hold = true; } else { rig.hold = false; if (pose) calibrate(true); } setModeLabel(); }
+  if (m.t === 'pose') { pose = m; if (!phoneSeen) { phoneSeen = true; if (camMode === 'manual') calibrate(); else setModeLabel(); } }
+  else if (m.t === 'hold') { if (m.on) { rig.hold = true; } else { rig.hold = false; hyb.q0 = null; if (pose && camMode === 'manual') calibrate(true); } setModeLabel(); }
   else if (m.t === 'reset' || m.t === 'recenter') { if (m.t === 'reset') goHome(); else if (pose) calibrate(true); }
   else if (m.t === 'rec') { m.on ? startRec() : stopRec(); }
   else if (m.t === 'play') { togglePlay(); }
   else if (m.t === 'lens') { setLens(+m.mm); }
 }
 const sendAll = (o) => { for (const c of conns) { try { c.send(o); } catch (e) {} } };
-setInterval(() => sendAll({ t: 'state', rec: !!rec, el: rec ? curT : 0, mm: Math.round(mm), busy, scene: SCENE_NAME, playing: playing && !rec, dur: DURATION }), 250);
+setInterval(() => sendAll({ t: 'state', rec: !!rec, el: rec ? curT : 0, mm: Math.round(mm), busy, scene: SCENE_NAME, playing: playing && !rec, dur: DURATION,
+  mode: camMode, shot: SHOTS.length && camMode !== 'manual' ? String(shotIndex(curT) + 1).padStart(2, '0') + ' ' + SHOTS[shotIndex(curT)].name : '' }), 250);
 
 // ---------- time / transport ----------
 let curT = 0, playing = false, playT0 = 0, rec = null, busy = false, takeN = 0;
@@ -573,7 +738,7 @@ function setTime(t) {
 function togglePlay(force) {
   if (rec || busy) return;
   playing = force ?? !playing;
-  if (playing) { if (curT >= DURATION - 0.05) setTime(0); playT0 = performance.now() - curT * 1000; captureRigStart(); }
+  if (playing) { if (curT >= DURATION - 0.05) setTime(0); playT0 = performance.now() - curT * 1000; captureRigStart(); hybReset(); }
   else endRig();
   $('playIcon').innerHTML = playing ? '<path d="M2 1h3v10H2zM7 1h3v10H7z"/>' : '<path d="M2 1l9 5-9 5z"/>';
 }
@@ -600,7 +765,7 @@ function startRec() {
   if (rec || busy) return;
   if (playing) togglePlay(false);
   setTime(0); update(0);
-  captureRigStart();
+  captureRigStart(); hybReset();
   const fps = +$('fps').value, mime = pickMime();
   let recorder = null; const chunks = [];
   try {
@@ -609,7 +774,7 @@ function startRec() {
     recorder.start(250);
   } catch (e) { recorder = null; }
   takeN++;
-  rec = { name: `${SCENE_NAME}_take_${String(takeN).padStart(3, '0')}`, t0: performance.now(), path: [], recorder, chunks, mime, fps, res: [...RES], code: sceneCode };
+  rec = { name: `${SCENE_NAME}_${camMode === 'manual' ? 'take' : camMode}_${String(takeN).padStart(3, '0')}`, t0: performance.now(), path: [], recorder, chunks, mime, fps, res: [...RES], code: sceneCode, mode: camMode, lastSi: 0 };
   $('recBtn').classList.add('on'); $('recBtn').setAttribute('aria-label', 'Stop recording');
   $('tally').classList.add('on'); $('track').classList.add('rec');
   ['aspect', 'quality', 'fps'].forEach((id) => $(id).disabled = true);
@@ -621,14 +786,15 @@ function stopRec() {
   $('tally').classList.remove('on'); $('tallyTxt').textContent = 'STBY'; $('track').classList.remove('rec');
   ['aspect', 'quality', 'fps'].forEach((id) => $(id).disabled = false);
   rigStart = null;
-  if ($('autoReturn').checked && r.path.length) {
+  if ($('autoReturn').checked && r.path.length && r.mode === 'manual') {
     const p0 = r.path[0];
     camera.position.set(...p0.p); camera.quaternion.set(...p0.q); mm = lensTarget = p0.mm;
     if (rig.on) calibrate(true); else { const f = new V3(0, 0, -1).applyQuaternion(camera.quaternion); controls.target.copy(camera.position).addScaledVector(f, Math.max(1, home.pos.distanceTo(home.target))); }
   }
   setTime(0);
   const finish = async () => {
-    const take = { name: r.name, res: r.res, fps: r.fps, path: r.path, code: r.code, scene: SCENE_NAME,
+    if (!r.path.length) return;   // stopped before a single frame was drawn
+    const take = { name: r.name, res: r.res, fps: r.fps, path: r.path, code: r.code, scene: SCENE_NAME, mode: r.mode,
       duration: r.path.length ? r.path[r.path.length - 1].t : 0, realtime: null, clean: null, thumb: null };
     if (r.chunks.length) take.realtime = new Blob(r.chunks, { type: r.mime || 'video/webm' });
     take.thumb = await renderPathFrame(take, 0, 'image/jpeg', 240);
@@ -646,11 +812,13 @@ function save(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 function pathJSON(t) {
-  return new Blob([JSON.stringify({ scene: t.scene, name: t.name, duration: t.duration, res: t.res, fps: t.fps, filmGauge: 36, sensorFit: 'AUTO',
-    coords: 'three.js: metres, +Y up, camera looks down -Z. Blender: (x, -z, y), q_b = Rx(90deg) * q_t', path: t.path })], { type: 'application/json' });
+  return new Blob([JSON.stringify({ scene: t.scene, name: t.name, mode: t.mode || 'manual', duration: t.duration, res: t.res, fps: t.fps, filmGauge: 36, sensorFit: 'AUTO',
+    coords: 'three.js: metres, +Y up, camera looks down -Z. Blender: (x, -z, y), q_b = Rx(90deg) * q_t. c: 1 marks the first frame after a cut.',
+    cuts: SHOTS.length && t.mode !== 'manual' && t.code === sceneCode ? SHOTS.slice(1).map((s) => +s.start.toFixed(3)) : [], path: bakedPath(t) })], { type: 'application/json' });
 }
 function renderTakes() {
   $('takeCount').textContent = takes.length;
+  $('autoBox').hidden = !SHOTS.length;
   if (!takes.length) { $('takes').innerHTML = '<div class="empty">No takes yet. Each take saves a clean MP4 to your Downloads.</div>'; return; }
   $('takes').innerHTML = '';
   for (const t of takes) {
@@ -665,6 +833,10 @@ function renderTakes() {
     btn('First frame', async () => { const blob = await renderPathFrame(t, 0, 'image/png'); save(blob, t.name + '_first_frame.png'); });
     btn('Realtime', () => save(t.realtime, t.name + (t.realtime.type.includes('mp4') ? '.mp4' : '.webm')), { disabled: !t.realtime });
     btn('Camera path', () => save(pathJSON(t), t.name + '.json'));
+    if (SHOTS.length > 1 && t.mode !== 'manual' && t.code === sceneCode) {
+      btn('Per-shot MP4s', () => renderShotFiles(t));
+      btn('Shot list', () => save(shotListFile(t), t.name + '_shots.json'));
+    }
     $('takes').appendChild(d);
   }
 }
@@ -675,18 +847,32 @@ function samplePath(path, t) {
   if (t >= path[hi].t) return path[hi];
   while (hi - lo > 1) { const mid = (lo + hi) >> 1; path[mid].t <= t ? lo = mid : hi = mid; }
   const a = path[lo], b = path[hi], k = (t - a.t) / (b.t - a.t || 1);
+  if (b.c) return a;   // never blend across a cut
   const q = new Q(...a.q).slerp(new Q(...b.q), k);
   return { p: a.p.map((v, i) => v + (b.p[i] - v) * k), q: [q.x, q.y, q.z, q.w], mm: a.mm + (b.mm - a.mm) * k };
 }
 
+// Camera of a take at time t: Auto takes are computed from the shot list (exact), others sampled from the recorded path.
+// Call update(t) first: live shots read the scene.
+function camForTake(take, t) {
+  if (take.mode === 'auto' && SHOTS.length) { const f = camAt(t); return { p: f.pos.toArray(), q: f.q.toArray(), mm: f.mm }; }
+  return samplePath(take.path, t);
+}
+function bakedPath(take) {
+  if (take.path.length) return take.path;
+  const out = [], N = Math.floor(take.duration * 24);
+  for (let i = 0; i <= N; i++) { const t = i / 24; update(t); const s = camForTake(take, t); out.push({ t: +t.toFixed(4), p: s.p.map((v) => +v.toFixed(5)), q: s.q.map((v) => +v.toFixed(6)), mm: +s.mm.toFixed(2) }); }
+  update(curT);
+  return out;
+}
 // Render one frame of a take (camera from its path, action at time t) without disturbing the live view.
 async function renderPathFrame(take, t, type = 'image/png', maxW = 0) {
   const keep = { res: [...RES], mm, pos: camera.position.clone(), q: camera.quaternion.clone(), code: sceneCode };
   if (take.code && take.code !== sceneCode) await loadSceneModule(take.code, { keepCamera: true });
   const [w, h] = take.res; renderer.setSize(w, h, false); camera.aspect = w / h;
-  const s = samplePath(take.path, t);
+  update(t); const s = camForTake(take, t);
   camera.position.set(...s.p); camera.quaternion.set(...s.q); camera.setFocalLength(s.mm);
-  update(t); renderer.render(scene, camera);
+  renderer.render(scene, camera);
   let out;
   if (maxW) { const c = document.createElement('canvas'); c.width = maxW; c.height = Math.round(maxW * h / w); c.getContext('2d').drawImage(canvas, 0, 0, c.width, c.height); out = c.toDataURL(type, 0.85); }
   else out = await new Promise((r) => canvas.toBlob(r, type));
@@ -702,10 +888,11 @@ async function pickCodec(w, h) {
   }
   return null;
 }
-async function renderClean(take) {
-  if (busy || rec) return;
+// Frame-exact 24 fps MP4 of a take. With a range [from, to] it renders that slice (one shot) and returns the file.
+async function renderClean(take, range = null) {
+  if (busy || rec) return null;
   const [w, h] = take.res, fps = 24, pick = await pickCodec(w, h);
-  if (!pick || !window.Mp4Muxer) { showError('This browser can\'t encode MP4 (needs WebCodecs: Chrome, Edge, Safari 16.4+ or the Claude app). Use the Realtime file instead.'); return; }
+  if (!pick || !window.Mp4Muxer) { showError('This browser can\'t encode MP4 (needs WebCodecs: Chrome, Edge, Safari 16.4+ or the Claude app). Use the Realtime file instead.'); return null; }
   if (take.code && take.code !== sceneCode) await loadSceneModule(take.code, { keepCamera: true });
   busy = true; $('busy').classList.add('on'); $('busyBar').style.width = '0';
   const keep = { res: [...RES], mm, pos: camera.position.clone(), q: camera.quaternion.clone() };
@@ -714,23 +901,65 @@ async function renderClean(take) {
   let encErr = null;
   const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { encErr = e; } });
   enc.configure({ codec: pick.codec, width: w, height: h, bitrate: h >= 1080 ? 24e6 : 14e6, framerate: fps });
-  const N = Math.max(1, Math.floor(take.duration * fps));
+  // A slice of a recorded path starts half a frame in, so its first frame is past the cut.
+  const t0 = range ? range[0] + (take.mode === 'auto' ? 0 : 0.5 / fps) : 0;
+  const N = range ? Math.max(1, Math.round((range[1] - range[0]) * fps)) - 1 : Math.max(1, Math.floor(take.duration * fps));
   for (let i = 0; i <= N && !encErr; i++) {
-    const s = samplePath(take.path, i / fps);
+    const t = t0 + i / fps;
+    update(t); const s = camForTake(take, t);
     camera.position.set(...s.p); camera.quaternion.set(...s.q); camera.setFocalLength(s.mm);
-    update(i / fps); renderer.render(scene, camera);
+    renderer.render(scene, camera);
     const frame = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
     enc.encode(frame, { keyFrame: i % 48 === 0 }); frame.close();
     if (enc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 0));
     if (i % 6 === 0) { $('busyTxt').textContent = `Rendering clean ${fps} fps · ${i} / ${N}`; $('busyBar').style.width = (i / N * 100) + '%'; await new Promise((r) => setTimeout(r, 0)); }
   }
-  try { await enc.flush(); muxer.finalize(); take.clean = new Blob([muxer.target.buffer], { type: 'video/mp4' }); } catch (e) { encErr = encErr || e; }
+  let blob = null;
+  try { await enc.flush(); muxer.finalize(); blob = new Blob([muxer.target.buffer], { type: 'video/mp4' }); if (!range) take.clean = blob; } catch (e) { encErr = encErr || e; }
   enc.close?.();
   RES = keep.res; renderer.setSize(RES[0], RES[1], false); camera.aspect = RES[0] / RES[1];
   mm = keep.mm; camera.position.copy(keep.pos); camera.quaternion.copy(keep.q);
   busy = false; $('busy').classList.remove('on'); $('busyTxt').textContent = 'Rendering…';
-  if (encErr) showError('Encoding failed: ' + (encErr.message || encErr));
+  update(curT);
+  if (encErr) { showError('Encoding failed: ' + (encErr.message || encErr)); blob = null; }
   renderTakes();
+  return blob;
+}
+const slug = (x) => String(x).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+let exporting = false;
+async function renderShotFiles(take) {
+  if (!SHOTS.length || exporting) return 0;
+  exporting = true;
+  try {
+  if (take.code && take.code !== sceneCode) await loadSceneModule(take.code, { keepCamera: true });
+  let n = 0;
+  for (const sh of SHOTS) {
+    const end = Math.min(sh.end, take.duration);
+    if (end - sh.start < 1 / 24) continue;
+    const blob = await renderClean(take, [sh.start, end]);
+    if (!blob) break;
+    save(blob, `${take.name}_s${String(sh.i + 1).padStart(2, '0')}_${slug(sh.name)}.mp4`); n++;
+  }
+  if (n) toast(`Saved ${n} shot file${n > 1 ? 's' : ''}`);
+  return n;
+  } finally { exporting = false; }
+}
+function shotListFile(take) {
+  const list = shotList();
+  const prompt = `@Video 1 is a ${list.length}-shot grey-box blocking pass. Keep its cuts, framing, lens and camera movement; take the timing of every cut from @Video 1.\n` + list.map((r) => r.line).join('\n');
+  return new Blob([JSON.stringify({ scene: SCENE_NAME, take: take?.name || null, duration: DURATION, shots: list, prompt }, null, 2)], { type: 'application/json' });
+}
+// Auto take without a realtime pass: the shot list rendered straight to a clean MP4.
+async function renderAuto({ download = true } = {}) {
+  if (!SHOTS.length || busy || rec) return null;
+  takeN++;
+  const take = { name: `${SCENE_NAME}_auto_${String(takeN).padStart(3, '0')}`, res: [...RES], fps: 24, path: [], code: sceneCode, scene: SCENE_NAME,
+    duration: DURATION, mode: 'auto', realtime: null, clean: null, thumb: null };
+  take.thumb = await renderPathFrame(take, 0, 'image/jpeg', 240);
+  takes.unshift(take); renderTakes();
+  await renderClean(take);
+  if (take.clean && download) { save(take.clean, take.name + '_clean.mp4'); toast('Saved ' + take.name + '_clean.mp4'); }
+  return take;
 }
 
 // ---------- stills ----------
@@ -741,6 +970,8 @@ async function saveStill() {
   save(blob, name); toast('Saved ' + name);
 }
 $('stillBtn').onclick = saveStill;
+$('autoRender').onclick = () => renderAuto();
+$('autoList').onclick = () => save(shotListFile(null), SCENE_NAME + '_shots.json');
 
 // ---------- popovers, menus, drawer ----------
 const pops = ['pairPop', 'moreMenu'];
@@ -783,7 +1014,7 @@ addEventListener('dragover', (e) => { e.preventDefault(); $('drop').classList.ad
 addEventListener('dragleave', (e) => { if (!e.relatedTarget) $('drop').classList.remove('on'); });
 addEventListener('drop', (e) => { e.preventDefault(); $('drop').classList.remove('on'); takeFiles([...e.dataTransfer.files]); });
 $('modeBtn').onclick = () => rig.on ? releaseToMouse() : calibrate();
-$('zoom').addEventListener('input', (e) => { zoomDrag = true; setLens(sliderToLens(+e.target.value)); });
+$('zoom').addEventListener('input', (e) => { if (camMode !== 'manual') return; zoomDrag = true; setLens(sliderToLens(+e.target.value)); });
 $('zoom').addEventListener('change', () => { zoomDrag = false; });
 $('zoom').addEventListener('pointerup', () => { zoomDrag = false; });
 
@@ -794,7 +1025,8 @@ addEventListener('keydown', (e) => {
   else if (k === ' ') { e.preventDefault(); togglePlay(); }
   else if (k === 'ArrowRight' || k === 'ArrowLeft') { if (!rec) { if (playing) togglePlay(false); setTime(curT + (k === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 1 : 0.1)); } }
   else if (k === 'Home') { if (!rec) { if (playing) togglePlay(false); setTime(0); } }
-  else if (k === 'm' || k === 'M') rig.on ? releaseToMouse() : calibrate();
+  else if (k === 'm' || k === 'M') { if (camMode === 'manual') rig.on ? releaseToMouse() : calibrate(); }
+  else if ((k === 'a' || k === 'A') && SHOTS.length && !rec) setCamMode({ manual: 'auto', auto: 'hybrid', hybrid: 'manual' }[camMode]);
   else if (k === 'h' || k === 'H') goHome();
   else if (k === 'g' || k === 'G') setGuide('thirds');
   else if (k === 's' || k === 'S') saveStill();
@@ -813,18 +1045,23 @@ function frame(now) {
   if (rec) setTime((now - rec.t0) / 1000);
   else if (playing) { const t = (now - playT0) / 1000; if (t >= DURATION) { setTime(DURATION); togglePlay(false); } else setTime(t); }
   const moving = rec || playing;
-  const ro = moving ? rigOffset(curT) : null;
-  if (rig.on) stepRig(dt, ro ? ro.o : null);
-  else if (!(moving && applyRigMouse(curT))) controls.update();
-  mm += (lensTarget - mm) * (1 - Math.pow(0.8, dt * 60));     // eased zoom
-  if (Math.abs(lensTarget - mm) < 0.01) mm = lensTarget;
+  update(curT);                                                 // action first: Auto shots can follow the cast
+  if (camMode !== 'manual' && SHOTS.length) applyShotCam(dt);
+  else {
+    const ro = moving ? rigOffset(curT) : null;
+    if (rig.on) stepRig(dt, ro ? ro.o : null);
+    else if (!(moving && applyRigMouse(curT))) controls.update();
+    mm += (lensTarget - mm) * (1 - Math.pow(0.8, dt * 60));     // eased zoom
+    if (Math.abs(lensTarget - mm) < 0.01) mm = lensTarget;
+  }
   camera.setFocalLength(mm);
   if (!zoomDrag) $('zoom').value = lensToSlider(mm);
   $('zoomVal').textContent = Math.round(mm) + 'mm';
-  update(curT);
+  markShot();
   renderer.render(scene, camera);
   if (rec) {
-    rec.path.push({ t: +curT.toFixed(4), p: camera.position.toArray().map((v) => +v.toFixed(5)), q: camera.quaternion.toArray().map((v) => +v.toFixed(6)), mm: +mm.toFixed(2) });
+    const si = camMode !== 'manual' && SHOTS.length ? shotIndex(curT) : 0, cut = si !== rec.lastSi && SHOTS[si]?.transition !== 'whip'; rec.lastSi = si;
+    rec.path.push({ t: +curT.toFixed(4), p: camera.position.toArray().map((v) => +v.toFixed(5)), q: camera.quaternion.toArray().map((v) => +v.toFixed(6)), mm: +mm.toFixed(2), ...(cut ? { c: 1 } : {}) });
     const s = curT % 60; $('tallyTxt').textContent = `REC ${String(Math.floor(curT / 60)).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}`;
     if ($('autoStop').checked && (now - rec.t0) / 1000 >= DURATION + 0.4) stopRec();
   }
@@ -860,7 +1097,12 @@ window.camlink = {
   get phoneConnected() { return conns.size > 0; },
   get takes() { return takes.map((t) => ({ name: t.name, duration: t.duration, clean: !!t.clean })); },
   seek: (t) => { if (playing) togglePlay(false); if (t !== null) setTime(+t); },
-  framing: (pos, target, lens) => { if (rig.on) releaseToMouse(); camera.position.set(...pos); controls.target.set(...target); if (lens) mm = lensTarget = lens; controls.update(); saveHome(); },
+  framing: (pos, target, lens) => { if (camMode !== 'manual') setCamMode('manual'); if (rig.on) releaseToMouse(); camera.position.set(...pos); controls.target.set(...target); if (lens) mm = lensTarget = lens; controls.update(); saveHome(); },
+  // Auto camera: setMode('manual'|'auto'|'hybrid'); shots lists the shot list with lines for the prompt; renderAuto() renders it to MP4.
+  setMode: (m) => { setCamMode(m); return camMode; }, get mode() { return camMode; },
+  get busy() { return busy || exporting; }, get phonePose() { return pose && pose.q; },
+  get shots() { return shotList(); }, shotAt: (t) => SHOTS.length ? shotIndex(+t) + 1 : 0,
+  renderAuto: async () => { const t = await renderAuto(); return t ? { name: t.name, clean: !!t.clean } : null; },
   camera, renderer, rig, calibrate, startRec, stopRec, renderClean: (i = 0) => renderClean(takes[i]),
   get scene() { return scene; }, get markers() { return markers; },
   // Presets Claude can set for the user: setMove('push', 'subtle'|'medium'|'big'), setGuide('thirds'|'9:16'|'4:5'|'1:1'|'none'), setFormat('9:16', 1080)
